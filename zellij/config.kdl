@@ -120,6 +120,7 @@ keybinds clear-defaults=true {
             }
             SwitchToMode "normal"
         }
+        bind "d" { Detach; }
         bind "l" {
             LaunchOrFocusPlugin "zellij:layout-manager" {
                 floating true

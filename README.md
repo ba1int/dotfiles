@@ -69,6 +69,8 @@ needed.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
   Zellij configuration and defines explicit list/table selection states for
   keyboard-driven plugins such as the session manager.
+- `Ctrl-o d` detaches from the current Zellij session without destroying it,
+  which is also how the isolated monitoring workstation returns to the host.
 - `nvim/colors/protocol-ink.vim` carries the editor palette, Treesitter/LSP
   groups, diagnostic semantics, and the shared ANSI colors.
 - `nvim/init.vim` adds the ledger statusline, square FZF record window, and
@@ -108,8 +110,34 @@ export MONITORING_LAB_HOME=/path/to/monitoring-lab
 lab
 ```
 
+To keep the lab on a remote Linux host, put one normal SSH destination in the
+machine-local config instead:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/monitoring-lab"
+printf '%s\n' 'operator@your-lab-host' \
+  > "${XDG_CONFIG_HOME:-$HOME/.config}/monitoring-lab/remote"
+lab
+```
+
+`MONITORING_LAB_REMOTE` overrides that file; setting it to an empty value forces
+local mode for one command. A bare `lab` uses `ssh -tt`, opens the remote
+`~/.local/bin/lab`, and keeps local-only tunnels for Icinga on
+`https://127.0.0.1:15665` and Nagios on
+`http://127.0.0.1:18081/nagios/`. When launched from Zellij, the outer session
+is locked while the remote workstation is active so its `Ctrl-o` bindings pass
+through; leaving the workstation restores the outer session to normal mode.
+Subcommands such as `lab status` still run remotely, but skip the short-lived
+web tunnels and Zellij handoff.
+
 If the standalone lab is absent, the terminal setup behaves normally; only the
 `lab` command reports that the optional project has not been found.
+
+The lab's isolated Ubuntu workstation installs this same configuration with
+`./install-terminal.sh --no-ghostty --with-shell --no-lab`. That internal mode
+keeps the Linux editor, multiplexer, and Bash setup while leaving container
+lifecycle control on the host; it does not install a broken recursive `lab`
+launcher inside the workstation.
 
 ## Validate
 

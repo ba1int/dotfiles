@@ -6,6 +6,7 @@ config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 stamp=$(date '+%Y%m%d-%H%M%S')
 install_ghostty=1
 install_shell=1
+install_lab=1
 
 usage() {
     cat <<'EOF'
@@ -15,6 +16,7 @@ Options:
   --no-ghostty  Skip Ghostty links (used by WSL/Windows Terminal).
   --no-shell    Skip the portable Bash/Zsh prompt and GNU dircolors adapter.
   --with-shell  Explicitly enable the shell layer (the default).
+  --no-lab      Skip the optional monitoring-lab launcher and SSH include.
   -h, --help    Show this help.
 EOF
 }
@@ -29,6 +31,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-shell)
             install_shell=0
+            ;;
+        --no-lab)
+            install_lab=0
             ;;
         -h|--help)
             usage
@@ -160,8 +165,11 @@ link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protoc
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
-link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"
-ensure_ssh_include "$HOME/.ssh/config" "$config_home/monitoring-lab/ssh_config"
+
+if [ "$install_lab" -eq 1 ]; then
+    link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"
+    ensure_ssh_include "$HOME/.ssh/config" "$config_home/monitoring-lab/ssh_config"
+fi
 
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
