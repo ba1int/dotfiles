@@ -56,7 +56,8 @@ needed.
 - `shell/protocol-ink.dircolors` maps GNU file categories onto the same ANSI
   semantics used by Ghostty, and `shell/protocol-ink.sh` loads it.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
-  Zellij configuration.
+  Zellij configuration and defines explicit list/table selection states for
+  keyboard-driven plugins such as the session manager.
 - `nvim/colors/protocol-ink.vim` carries the editor palette, Treesitter/LSP
   groups, diagnostic semantics, and the shared ANSI colors.
 - `nvim/init.vim` adds the ledger statusline, square FZF record window, and
