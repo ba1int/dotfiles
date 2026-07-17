@@ -4,6 +4,13 @@
 protocol_ink_config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 protocol_ink_dircolors="$protocol_ink_config_home/protocol-ink/dircolors"
 protocol_ink_prompt="$protocol_ink_config_home/protocol-ink/prompt.sh"
+protocol_ink_local_bin="$HOME/.local/bin"
+
+case ":$PATH:" in
+    *":$protocol_ink_local_bin:"*) ;;
+    *) PATH="$protocol_ink_local_bin:$PATH" ;;
+esac
+export PATH
 
 if command -v dircolors >/dev/null 2>&1 && [ -r "$protocol_ink_dircolors" ]; then
     eval "$(dircolors -b "$protocol_ink_dircolors")"
@@ -17,4 +24,4 @@ if [ "${PROTOCOL_INK_PROMPT:-1}" != 0 ] && [ -r "$protocol_ink_prompt" ]; then
     . "$protocol_ink_prompt"
 fi
 
-unset protocol_ink_config_home protocol_ink_dircolors protocol_ink_prompt
+unset protocol_ink_config_home protocol_ink_dircolors protocol_ink_prompt protocol_ink_local_bin

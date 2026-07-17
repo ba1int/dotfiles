@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+find_lab_home() {
+    if [ -n "${MONITORING_LAB_HOME:-}" ]; then
+        printf '%s\n' "$MONITORING_LAB_HOME"
+        return
+    fi
+
+    for candidate in \
+        "$HOME/Documents/monitoring-lab" \
+        "$HOME/monitoring-lab"
+    do
+        if [ -x "$candidate/bin/lab" ]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+    done
+
+    return 1
+}
+
+lab_home=$(find_lab_home) || {
+    printf '%s\n' 'lab: monitoring-lab was not found.' >&2
+    printf '%s\n' 'Set MONITORING_LAB_HOME or clone it to ~/Documents/monitoring-lab.' >&2
+    exit 1
+}
+
+if [ ! -x "$lab_home/bin/lab" ]; then
+    printf 'lab: launcher is not executable: %s/bin/lab\n' "$lab_home" >&2
+    exit 1
+fi
+
+exec "$lab_home/bin/lab" "$@"

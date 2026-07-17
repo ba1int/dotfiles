@@ -64,6 +64,8 @@ needed.
 - `shell/protocol-ink-prompt.sh` renders the current command as a Manual /
   Index record using real history, path, Git, dirty, and exit-status metadata.
 - `shell/protocol-ink.sh` composes the portable prompt and GNU color adapter.
+- `bin/lab` is a location-independent launcher for the optional standalone
+  monitoring lab and keeps its implementation out of the dotfiles repository.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
   Zellij configuration and defines explicit list/table selection states for
   keyboard-driven plugins such as the session manager.
@@ -92,6 +94,22 @@ an existing prompt.
 Ghostty loads an optional `local.ghostty` last. Put it in the live Ghostty
 config directory when a machine needs a different font size or padding; it
 will not be touched by the installer.
+
+## Monitoring lab launcher
+
+The installer links `lab` into `~/.local/bin` and adds one optional SSH include
+for the monitoring lab's ten explicit host aliases. The actual containers remain
+in a separate repository at `~/Documents/monitoring-lab` on macOS or
+`~/monitoring-lab` on Linux/WSL.
+Override either location without editing these dotfiles:
+
+```sh
+export MONITORING_LAB_HOME=/path/to/monitoring-lab
+lab
+```
+
+If the standalone lab is absent, the terminal setup behaves normally; only the
+`lab` command reports that the optional project has not been found.
 
 ## Validate
 

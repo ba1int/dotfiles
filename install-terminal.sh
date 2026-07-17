@@ -86,6 +86,52 @@ ensure_shell_source() {
     printf 'source  %s\n' "$target_path"
 }
 
+ensure_ssh_include() {
+    target_path=$1
+    include_path=$2
+    escaped_include_path=$(printf '%s' "$include_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    include_line="Include \"$escaped_include_path\""
+    legacy_include_line="Include $include_path"
+
+    if [ -f "$target_path" ] && grep -Fqx "$include_line" "$target_path" >/dev/null 2>&1; then
+        printf 'ok      %s\n' "$target_path"
+        return
+    fi
+
+    mkdir -p "$(dirname -- "$target_path")"
+    if [ -L "$target_path" ] && [ ! -e "$target_path" ]; then
+        printf 'error   refusing to replace broken SSH config symlink: %s\n' "$target_path" >&2
+        exit 1
+    fi
+    if [ -e "$target_path" ]; then
+        backup_path="${target_path}.backup-${stamp}"
+        cp -p "$target_path" "$backup_path"
+        printf 'backup  %s -> %s\n' "$target_path" "$backup_path"
+    fi
+
+    temporary_path="${target_path}.protocol-ink.$$"
+    {
+        printf '# Optional local monitoring lab aliases\n%s\n\n' "$include_line"
+        if [ -f "$target_path" ]; then
+            while IFS= read -r existing_line || [ -n "$existing_line" ]; do
+                [ "$existing_line" = '# Optional local monitoring lab aliases' ] && continue
+                [ "$existing_line" = "$include_line" ] && continue
+                [ "$existing_line" = "$legacy_include_line" ] && continue
+                printf '%s\n' "$existing_line"
+            done < "$target_path"
+        fi
+    } > "$temporary_path"
+
+    if [ -L "$target_path" ]; then
+        cat "$temporary_path" > "$target_path"
+        rm -f "$temporary_path"
+    else
+        chmod 0600 "$temporary_path"
+        mv "$temporary_path" "$target_path"
+    fi
+    printf 'include %s -> %s\n' "$target_path" "$include_path"
+}
+
 zellij_dir="$config_home/zellij"
 nvim_dir="$config_home/nvim"
 
@@ -114,6 +160,8 @@ link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protoc
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
+link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"
+ensure_ssh_include "$HOME/.ssh/config" "$config_home/monitoring-lab/ssh_config"
 
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
