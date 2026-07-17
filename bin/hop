@@ -2,14 +2,19 @@
 
 set -euo pipefail
 
-readonly HOP_BG='#171815'
-readonly HOP_FG='#E8E1D2'
-readonly HOP_PAPER='#F3F0E7'
-readonly HOP_RULE='#44463F'
-readonly HOP_META='#8D8F86'
-readonly HOP_TEAL='#78B8B3'
-readonly HOP_TEAL_DARK='#426B68'
-readonly HOP_CORAL='#EF5B4C'
+OPS_PROGRAM=hop
+ops_share=${PROTOCOL_OPS_SHARE:-"${XDG_DATA_HOME:-$HOME/.local/share}/protocol-ops"}
+script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ ! -r $ops_share/runtime.sh ]]; then
+    ops_share="$script_dir/../lib/protocol-ops"
+fi
+[[ -r $ops_share/runtime.sh ]] || {
+    printf 'hop: shared runtime missing; rerun install-terminal.sh\n' >&2
+    exit 1
+}
+. "$ops_share/runtime.sh"
+. "$ops_share/inventory.sh"
+. "$ops_share/fzf.sh"
 
 usage() {
     cat <<'EOF'
@@ -21,95 +26,52 @@ Options:
   --print             Print the selection instead of connecting.
   --select HOST       Select an exact inventory alias without opening fzf.
   --list              Print the validated inventory as TSV.
-  --inventory FILE    Use FILE instead of HOP_INVENTORY or the XDG default.
+  --inventory FILE    Use an explicit host inventory.
   -h, --help          Show this help.
 
 Inventory precedence:
   1. --inventory FILE
-  2. HOP_INVENTORY
-  3. ${XDG_CONFIG_HOME:-$HOME/.config}/hop/hosts.tsv
+  2. OPS_INVENTORY
+  3. HOP_INVENTORY (legacy compatibility)
+  4. ${XDG_CONFIG_HOME:-$HOME/.config}/hop/hosts.tsv
 
 The exact TSV header is: name<TAB>environment<TAB>role<TAB>site
 EOF
 }
 
-die() {
-    printf 'hop: %s\n' "$*" >&2
-    exit 1
-}
-
-need() {
-    command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
-}
-
 preview_record() {
     local host record environment role site ssh_config hostname user port route
     host=${1:-}
-
     case $host in
         ''|*[!A-Za-z0-9._-]*) return 1 ;;
     esac
     [[ $host =~ ^[A-Za-z0-9] ]] || return 1
     [[ -n ${HOP_RECORDS_FILE:-} && -r $HOP_RECORDS_FILE ]] || return 1
 
-    record=$(awk -F '\t' -v wanted="$host" '$1 == wanted { print; exit }' \
-        "$HOP_RECORDS_FILE")
+    record=$(ops_inventory_find "$HOP_RECORDS_FILE" "$host")
     [[ -n $record ]] || return 1
     IFS=$'\t' read -r host environment role site <<< "$record"
 
-    ssh_config=$(ssh -G -- "$host" 2>/dev/null || true)
+    ssh_config=$("$OPS_SSH_BIN" -G -- "$host" 2>/dev/null || true)
     hostname=$(awk '$1 == "hostname" { print $2; exit }' <<< "$ssh_config")
     user=$(awk '$1 == "user" { print $2; exit }' <<< "$ssh_config")
     port=$(awk '$1 == "port" { print $2; exit }' <<< "$ssh_config")
     route=$(awk '$1 == "proxyjump" { print $2; exit }' <<< "$ssh_config")
-
     [[ -n $hostname ]] || hostname=$host
     [[ -n $user ]] || user=${USER:-user}
     [[ -n $port ]] || port=22
-    if [[ -z $route || $route == none ]]; then
-        route=direct
-    fi
+    [[ -n $route && $route != none ]] || route=direct
 
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then
-        printf '\033[38;2;120;184;179m'
-    fi
-    printf '%-13s' ALIAS
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then
-        printf '\033[38;2;243;240;231m'
-    fi
-    printf '%s\n' "$host"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' ENVIRONMENT
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;232;225;210m'; fi
-    printf '%s\n' "$environment"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' SITE
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;232;225;210m'; fi
-    printf '%s\n' "$site"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' ROLE
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;232;225;210m'; fi
-    printf '%s\n\n' "$role"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' TARGET
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;232;225;210m'; fi
-    printf '%s@%s:%s\n' "$user" "$hostname" "$port"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' ROUTE
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;232;225;210m'; fi
-    printf '%s\n' "$route"
-
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;141;143;134m'; fi
-    printf '%-13s' COMMAND
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[38;2;120;184;179m'; fi
-    printf 'ssh %s' "$host"
-    if [[ ${HOP_COLOR:-0} == 1 ]]; then printf '\033[0m'; fi
+    OPS_COLOR=${OPS_COLOR:-1}
+    OPS_LABEL_WIDTH=13
+    ops_field ALIAS "$host" paper
+    ops_field ENVIRONMENT "$environment"
+    ops_field SITE "$site"
+    ops_field ROLE "$role"
     printf '\n'
+    ops_field TARGET "$user@$hostname:$port"
+    ops_field ROUTE "$route"
+    ops_field COMMAND "ssh $host" accent
 }
 
 if [[ ${1:-} == --_preview ]]; then
@@ -118,7 +80,7 @@ if [[ ${1:-} == --_preview ]]; then
     exit
 fi
 
-inventory=${HOP_INVENTORY:-"${XDG_CONFIG_HOME:-$HOME/.config}/hop/hosts.tsv"}
+inventory_flag=
 print_only=0
 list_only=0
 selected_host=
@@ -127,20 +89,18 @@ query_count=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --print)
-            print_only=1
-            ;;
-        --list)
-            list_only=1
-            ;;
+        --print) print_only=1 ;;
+        --list) list_only=1 ;;
         --select)
-            [[ $# -ge 2 ]] || die '--select requires a host alias'
+            [[ $# -ge 2 ]] || ops_die '--select requires a host alias'
+            [[ -n $2 ]] || ops_die '--select requires a nonempty host alias'
             selected_host=$2
             shift
             ;;
         --inventory)
-            [[ $# -ge 2 ]] || die '--inventory requires a file'
-            inventory=$2
+            [[ $# -ge 2 ]] || ops_die '--inventory requires a file'
+            [[ -n $2 ]] || ops_die '--inventory requires a nonempty file path'
+            inventory_flag=$2
             shift
             ;;
         -h|--help)
@@ -156,9 +116,7 @@ while [[ $# -gt 0 ]]; do
             done
             break
             ;;
-        -*)
-            die "unknown option: $1"
-            ;;
+        -*) ops_die "unknown option: $1" ;;
         *)
             queries+=("$1")
             query_count=$((query_count + 1))
@@ -167,69 +125,14 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-[[ -r $inventory ]] || die "inventory is not readable: $inventory"
 [[ -z $selected_host || $query_count -eq 0 ]] \
-    || die 'a query cannot be combined with --select'
+    || ops_die 'a query cannot be combined with --select'
 
-tmp_root=${TMPDIR:-/tmp}
-records_file=$(mktemp "${tmp_root%/}/hop.records.XXXXXX") \
-    || die 'could not create a temporary records file'
-choices_file=$(mktemp "${tmp_root%/}/hop.choices.XXXXXX") || {
-    rm -f -- "$records_file"
-    die 'could not create a temporary choices file'
-}
-cleanup() {
-    rm -f -- "$records_file" "$choices_file"
-}
-trap cleanup EXIT
-trap 'exit 130' HUP INT TERM
-
-if ! LC_ALL=C awk -F '\t' -v OFS='\t' '
-    { sub(/\r$/, "", $0) }
-    NR == 1 {
-        if ($0 != "name\tenvironment\trole\tsite") {
-            print "hop: inventory header must be name<TAB>environment<TAB>role<TAB>site" > "/dev/stderr"
-            fatal = 1
-            exit 2
-        }
-        next
-    }
-    NF != 4 {
-        printf "hop: inventory line %d must contain exactly four tab-separated fields\n", NR > "/dev/stderr"
-        bad = 1
-        next
-    }
-    $1 !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/ {
-        printf "hop: inventory line %d has an unsafe host alias: %s\n", NR, $1 > "/dev/stderr"
-        bad = 1
-        next
-    }
-    $1 == "" || $2 == "" || $3 == "" || $4 == "" {
-        printf "hop: inventory line %d contains an empty field\n", NR > "/dev/stderr"
-        bad = 1
-        next
-    }
-    $1 ~ /[[:cntrl:]]/ || $2 ~ /[[:cntrl:]]/ || $3 ~ /[[:cntrl:]]/ || $4 ~ /[[:cntrl:]]/ {
-        printf "hop: inventory line %d contains a control character\n", NR > "/dev/stderr"
-        bad = 1
-        next
-    }
-    seen[$1]++ {
-        printf "hop: duplicate host alias on inventory line %d: %s\n", NR, $1 > "/dev/stderr"
-        bad = 1
-        next
-    }
-    { print $1, $2, $3, $4; records++ }
-    END {
-        if (fatal || bad) exit 2
-        if (records == 0) {
-            print "hop: inventory contains no host records" > "/dev/stderr"
-            exit 2
-        }
-    }
-' "$inventory" > "$records_file"; then
-    exit 1
-fi
+inventory=$(ops_inventory_path "$inventory_flag")
+ops_tmp_open
+records_file="$OPS_TMPDIR/hosts.tsv"
+choices_file="$OPS_TMPDIR/choices.tsv"
+ops_inventory_normalize "$inventory" "$records_file"
 
 if [[ $list_only -eq 1 ]]; then
     printf 'name\tenvironment\trole\tsite\n'
@@ -237,56 +140,31 @@ if [[ $list_only -eq 1 ]]; then
     exit 0
 fi
 
-host_exists() {
-    LC_ALL=C awk -F '\t' -v wanted="$1" \
-        '$1 == wanted { found = 1; exit } END { exit !found }' "$records_file"
-}
-
 if [[ -n $selected_host ]]; then
-    host_exists "$selected_host" \
-        || die "host is not present in the inventory: $selected_host"
+    ops_inventory_has "$records_file" "$selected_host" \
+        || ops_die "host is not present in the inventory: $selected_host"
 else
-    need fzf
+    ops_need "$OPS_FZF_BIN"
+    record_count=$(ops_inventory_count "$records_file")
+    ops_fzf_base "SSH HOST INDEX / ${record_count} RECORDS" "$record_count"
 
-    columns=${COLUMNS:-}
-    lines=${LINES:-}
-    if [[ ! $columns =~ ^[0-9]+$ ]]; then
-        columns=$(tput cols 2>/dev/null || true)
-    fi
-    if [[ ! $lines =~ ^[0-9]+$ ]]; then
-        lines=$(tput lines 2>/dev/null || true)
-    fi
-    [[ $columns =~ ^[0-9]+$ ]] || columns=120
-    [[ $lines =~ ^[0-9]+$ ]] || lines=30
-    columns=$((10#$columns))
-    lines=$((10#$lines))
-
-    if (( columns < 64 )); then
+    if (( OPS_COLUMNS < 64 )); then
         header='ENV   HOST'
         while IFS=$'\t' read -r host environment role site; do
-            printf '%s\t%s %s %s %s\t%-5.5s %s\n' \
+            printf '%s\t%s %s %s %s\t%-5s %s\n' \
                 "$host" "$environment" "$site" "$role" "$host" \
                 "$environment" "$host"
         done < "$records_file" > "$choices_file"
     else
         header='ENV   SITE       ROLE             HOST'
         while IFS=$'\t' read -r host environment role site; do
-            printf '%s\t%s %s %s %s\t%-5.5s %-10.10s %-16.16s %s\n' \
+            printf '%s\t%s %s %s %s\t%-5s %-10s %-16s %s\n' \
                 "$host" "$environment" "$site" "$role" "$host" \
                 "$environment" "$site" "$role" "$host"
         done < "$records_file" > "$choices_file"
     fi
+    header="${header}"$'\n''ENTER SSH  CTRL-/ PREVIEW  ESC CANCEL'
 
-    record_count=$(awk 'END { print NR }' "$records_file")
-    if (( lines < 18 )); then
-        picker_height='100%'
-    else
-        max_picker_height=$((lines * 80 / 100))
-        (( max_picker_height >= 15 )) || max_picker_height=15
-        picker_height=$((record_count + 7))
-        (( picker_height >= 15 )) || picker_height=15
-        (( picker_height <= max_picker_height )) || picker_height=$max_picker_height
-    fi
     query=
     if (( query_count > 0 )); then
         for query_part in "${queries[@]}"; do
@@ -294,63 +172,39 @@ else
         done
     fi
 
-    self_path=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")
+    self_path="$script_dir/$(basename -- "${BASH_SOURCE[0]}")"
     printf -v preview_command '%q --_preview {1}' "$self_path"
     export HOP_RECORDS_FILE="$records_file"
-    export HOP_COLOR=1
-
-    preview_window='down,45%,hidden,border-sharp'
-    if (( columns >= 110 && lines >= 18 )); then
-        preview_window='right,42%,border-sharp'
-    fi
-
-    fzf_colors="fg:${HOP_FG},bg:${HOP_BG},hl:${HOP_TEAL}"
-    fzf_colors="${fzf_colors},fg+:${HOP_PAPER},bg+:${HOP_TEAL_DARK},hl+:${HOP_PAPER}"
-    fzf_colors="${fzf_colors},info:${HOP_META},prompt:${HOP_TEAL},pointer:${HOP_CORAL}"
-    fzf_colors="${fzf_colors},marker:${HOP_CORAL},spinner:${HOP_TEAL},header:${HOP_META}"
-    fzf_colors="${fzf_colors},border:${HOP_RULE},label:${HOP_META},query:${HOP_FG}"
-    fzf_colors="${fzf_colors},gutter:${HOP_BG},preview-bg:${HOP_BG},preview-border:${HOP_RULE}"
-    fzf_colors="${fzf_colors},preview-label:${HOP_TEAL},preview-fg:${HOP_FG}"
-    fzf_colors="${fzf_colors},footer:${HOP_META},footer-border:${HOP_RULE}"
+    export OPS_COLOR=1
 
     fzf_args=(
-        "--height=$picker_height"
-        '--layout=reverse'
-        '--border=sharp'
-        "--border-label= SSH HOST INDEX / ${record_count} RECORDS "
-        '--border-label-pos=2'
+        "${OPS_FZF_BASE[@]}"
         '--delimiter=\t'
         '--with-nth=3'
         '--nth=1,2'
-        '--accept-nth=1'
-        '--no-multi'
-        '--highlight-line'
-        '--info=inline-right'
         '--prompt=FILTER / '
-        '--pointer=›'
-        '--marker=•'
         "--header=$header"
-        '--footer=ENTER SSH  CTRL-/ PREVIEW  ESC CANCEL'
-        '--footer-border=line'
         "--query=$query"
         "--preview=$preview_command"
         '--preview-label= HOST RECORD '
-        "--preview-window=$preview_window"
+        "--preview-window=$OPS_PREVIEW_WINDOW"
         '--bind=ctrl-/:toggle-preview'
-        "--color=$fzf_colors"
     )
 
     set +e
-    selected_host=$(FZF_DEFAULT_OPTS='' fzf "${fzf_args[@]}" < "$choices_file")
+    selected_line=$(FZF_DEFAULT_OPTS='' \
+        "$OPS_FZF_BIN" "${fzf_args[@]}" < "$choices_file")
     fzf_status=$?
     set -e
     case $fzf_status in
         0) ;;
         1|130) exit 0 ;;
-        *) die "fzf exited with status $fzf_status" ;;
+        *) ops_die "fzf exited with status $fzf_status" ;;
     esac
-    [[ -n $selected_host ]] || exit 0
-    host_exists "$selected_host" || die 'fzf returned a host outside the inventory'
+    [[ -n $selected_line ]] || exit 0
+    selected_host=${selected_line%%$'\t'*}
+    ops_inventory_has "$records_file" "$selected_host" \
+        || ops_die 'fzf returned a host outside the inventory'
 fi
 
 if [[ $print_only -eq 1 ]]; then
@@ -358,8 +212,7 @@ if [[ $print_only -eq 1 ]]; then
     exit 0
 fi
 
-need ssh
-cleanup
-trap - EXIT
-unset HOP_RECORDS_FILE HOP_COLOR
-exec ssh -- "$selected_host"
+ops_need "$OPS_SSH_BIN"
+ops_tmp_cleanup
+unset HOP_RECORDS_FILE OPS_COLOR
+exec "$OPS_SSH_BIN" -- "$selected_host"

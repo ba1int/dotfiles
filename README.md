@@ -14,6 +14,11 @@ cd ~/dotfiles
 ./install-terminal.sh
 ```
 
+The linked tools expect Neovim, Zellij, fzf, ripgrep, jq, curl, and OpenSSH.
+On macOS, `brew install neovim zellij fzf ripgrep jq` supplies everything not
+already included by the operating system; the installer reports anything
+still missing without installing packages behind your back.
+
 The installer detects Ghostty's platform-specific main config location, links
 its custom theme into the XDG theme search path, backs up conflicting live
 files, installs the portable shell layer, and keeps this repository as the
@@ -22,8 +27,10 @@ keep its existing prompt.
 
 ### WSL 2 with Windows Terminal
 
-TX-02 must be installed in Windows, while Neovim and Zellij must be installed
-inside WSL. From the cloned repository inside WSL, run:
+TX-02 must be installed in Windows. Inside WSL, the complete suite uses Neovim,
+Zellij, fzf, ripgrep, curl, jq, and OpenSSH. On Ubuntu/Debian, install the small
+base-tool set with `sudo apt-get install fzf ripgrep curl jq openssh-client`;
+install Neovim and Zellij at the versions you prefer. Then run:
 
 ```sh
 git clone git@github.com:ba1int/dotfiles.git ~/dotfiles
@@ -34,6 +41,7 @@ cd ~/dotfiles
 That one command:
 
 - links the Neovim and Zellij configuration inside WSL;
+- links `hop`, `peek`, `kb`, and `pulse` plus their shared runtime;
 - installs the Bash/Zsh index prompt and matching GNU `LS_COLORS` semantics;
 - installs a modular Windows Terminal JSON fragment for Protocol Ink;
 - creates a dedicated `Protocol Ink / WSL` profile using TX-02; and
@@ -68,6 +76,14 @@ needed.
   monitoring lab and keeps its implementation out of the dotfiles repository.
 - `bin/hop` is a portable, inventory-backed SSH host index with local route
   previews and no background reachability probes.
+- `bin/peek` runs replaceable, named read-only checks through one SSH session
+  and renders a host record.
+- `bin/kb` indexes one machine-local Markdown cheatsheet folder without an
+  Obsidian plugin, database, or background indexer.
+- `bin/pulse` normalizes active hard-state problems through replaceable
+  monitoring adapters; the supplied adapters support Icinga and Nagios.
+- `lib/protocol-ops/` owns the shared Bash 3.2 inventory validation, private
+  temp lifecycle, responsive fzf frame, palette, check profiles, and adapters.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
   Zellij configuration and defines explicit list/table selection states for
   keyboard-driven plugins such as the session manager.
@@ -135,7 +151,15 @@ web tunnels and Zellij handoff.
 If the standalone lab is absent, the terminal setup behaves normally; only the
 `lab` command reports that the optional project has not been found.
 
-## SSH host index
+## Protocol Ops
+
+`hop`, `peek`, `kb`, and `pulse` share one small runtime linked at
+`${XDG_DATA_HOME:-$HOME/.local/share}/protocol-ops`. Machine-specific
+configuration remains outside the repository in
+`${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops`. There is no daemon, database,
+shell telemetry, or background polling.
+
+### SSH host index
 
 Run `hop` to filter hosts by alias, environment, role, or site, inspect the
 resolved local SSH route, and connect with Enter. `Ctrl-/` toggles the record
@@ -149,7 +173,7 @@ The picker reads one authoritative tab-separated inventory. Set its location
 per machine so the dotfiles remain unchanged:
 
 ```sh
-export HOP_INVENTORY="$HOME/work-inventory/hosts.tsv"
+export OPS_INVENTORY="$HOME/work-inventory/hosts.tsv"
 ```
 
 The required schema is deliberately small and scales to a fleet export:
@@ -162,6 +186,79 @@ app01.example.net<TAB>PROD<TAB>middleware<TAB>dc1
 `--print` returns a selection for scripts without connecting, while
 `--select HOST --print` is a noninteractive validation seam. SSH configuration
 remains the source of truth for usernames, ports, keys, and jump hosts.
+
+`HOP_INVENTORY` remains a compatibility fallback, but `OPS_INVENTORY` is shared
+by the complete suite.
+
+### Host record
+
+`peek HOST` renders inventory metadata, the resolved SSH route, an optional
+`pulse` summary, and named remote checks through one SSH connection. With no
+host it opens `hop` first:
+
+```sh
+peek
+peek app01.example.net
+```
+
+Checks are strict TSV data files with the schema
+`id<TAB>label<TAB>command`. To customize them without changing the clone, copy
+the defaults and edit `common.tsv`; an optional file named after the inventory
+role is appended automatically:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/peek.d"
+cp "${XDG_DATA_HOME:-$HOME/.local/share}/protocol-ops/peek.d/common.tsv" \
+  "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/peek.d/common.tsv"
+```
+
+Portable role-profile names may contain letters, numbers, spaces, dots,
+underscores, and hyphens; `common` is reserved for the mandatory base profile.
+
+`--checks-dir` and `PEEK_CHECKS_DIR` can select a completely different profile
+folder. Check commands are trusted local configuration, so keep them
+read-only and version controlled.
+
+### Cheatsheet index
+
+Point `kb` at the exact Obsidian subfolder—or any Markdown folder—you want it
+to search:
+
+```sh
+kb --set-root "/mnt/c/Users/you/Documents/Obsidian/Vault/Cheatsheets"
+kb rabbitmq timeout
+```
+
+The saved path is machine-local. `--root DIR` and `KB_ROOT` provide temporary
+overrides. Enter opens the selected note with `KB_EDITOR`, `VISUAL`, or
+`EDITOR`; `--print` returns its absolute path for an Obsidian wrapper. Paths
+are represented inside fzf by numeric IDs, so spaces and shell punctuation are
+never evaluated.
+
+### Monitoring problem index
+
+`pulse` reads active hard-state service problems on demand. Enter hands a host
+to `peek`, `Ctrl-s` opens SSH, `Ctrl-/` toggles the problem record, and
+`--list` emits normalized TSV.
+
+Copy the strict, non-executable configuration example and protect credentials:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops"
+cp "${XDG_DATA_HOME:-$HOME/.local/share}/protocol-ops/pulse.conf.example" \
+  "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/pulse.conf"
+chmod 0600 "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/pulse.conf"
+```
+
+Environment variables such as `PULSE_ICINGA_URL`, `PULSE_ICINGA_USER`, and
+`PULSE_ICINGA_PASSWORD` override file values. Replace the whole adapter folder
+with `PULSE_ADAPTER_DIR`; each executable adapter has the intentionally small
+`name` / `fetch` contract used by the supplied Icinga and Nagios scripts.
+`name` prints one uppercase source key. `fetch` prints zero or more strict rows
+as `source<TAB>severity<TAB>host<TAB>service<TAB>output<TAB>epoch`; exit `10`
+means unconfigured and any other nonzero status marks the index incomplete.
+TLS verification stays enabled unless `icinga_insecure=1` is explicitly set,
+which is used only by the self-signed mock lab.
 
 The lab's isolated Ubuntu workstation installs this same configuration with
 `./install-terminal.sh --no-ghostty --with-shell --no-lab`. That internal mode

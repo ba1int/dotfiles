@@ -1,0 +1,11 @@
+# Copy to ${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/pulse.conf
+# and chmod 0600. Environment variables with matching names override it.
+icinga_url=https://icinga.example.net:5665
+icinga_user=api-reader
+icinga_password=replace-me
+icinga_insecure=0
+nagios_url=https://nagios.example.net/nagios/cgi-bin/statusjson.cgi
+nagios_user=api-reader
+nagios_password=replace-me
+connect_timeout=3
+max_time=10

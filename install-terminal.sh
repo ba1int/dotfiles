@@ -3,6 +3,7 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 stamp=$(date '+%Y%m%d-%H%M%S')
 install_ghostty=1
 install_shell=1
@@ -165,7 +166,11 @@ link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protoc
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
+link_path "$repo_root/lib/protocol-ops" "$data_home/protocol-ops"
 link_path "$repo_root/bin/hop" "$HOME/.local/bin/hop"
+link_path "$repo_root/bin/peek" "$HOME/.local/bin/peek"
+link_path "$repo_root/bin/kb" "$HOME/.local/bin/kb"
+link_path "$repo_root/bin/pulse" "$HOME/.local/bin/pulse"
 
 if [ "$install_lab" -eq 1 ]; then
     link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"
@@ -204,4 +209,15 @@ if [ "$install_ghostty" -eq 1 ]; then
 fi
 if [ "$install_shell" -eq 1 ]; then
     printf 'Start a new shell to apply the index prompt and GNU file colors.\n'
+fi
+
+missing_tools=''
+for tool_name in nvim zellij fzf rg curl jq ssh; do
+    if ! command -v "$tool_name" >/dev/null 2>&1; then
+        missing_tools="$missing_tools $tool_name"
+    fi
+done
+if [ -n "$missing_tools" ]; then
+    printf 'warn    install these programs before using every linked module:%s\n' \
+        "$missing_tools" >&2
 fi

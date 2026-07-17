@@ -1,0 +1,536 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+OPS_PROGRAM=pulse
+ops_share=${PROTOCOL_OPS_SHARE:-"${XDG_DATA_HOME:-$HOME/.local/share}/protocol-ops"}
+script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ ! -r $ops_share/runtime.sh ]]; then
+    ops_share="$script_dir/../lib/protocol-ops"
+fi
+[[ -r $ops_share/runtime.sh ]] || {
+    printf 'pulse: shared runtime missing; rerun install-terminal.sh\n' >&2
+    exit 1
+}
+. "$ops_share/runtime.sh"
+. "$ops_share/inventory.sh"
+. "$ops_share/fzf.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: pulse [options] [query ...]
+
+Show active hard-state problems from modular monitoring adapters.
+
+Options:
+  --inventory FILE     Use an explicit host inventory.
+  --config FILE        Read strict key=value source configuration from FILE.
+  --adapter-dir DIR    Load executable monitoring adapters from DIR.
+  --summary HOST       Print one host's source summary without fzf.
+  --list               Print normalized active problems as TSV.
+  --print              Print the selected host instead of opening peek.
+  -h, --help           Show this help.
+
+Adapter directory precedence:
+  1. --adapter-dir DIR
+  2. PULSE_ADAPTER_DIR
+  3. ${OPS_CONFIG_HOME}/pulse.d when it exists
+  4. the installed Icinga and Nagios adapters
+
+Configuration defaults to ${OPS_CONFIG_HOME}/pulse.conf. Environment variables
+override matching file keys. Adapters are read-only and stdout only normalized
+problem records; failed sources are reported instead of being shown as healthy.
+EOF
+}
+
+set_config_value() {
+    local key value
+    key=$1
+    value=$2
+    case $key in
+        icinga_url)
+            [[ -n ${PULSE_ICINGA_URL+x} ]] || PULSE_ICINGA_URL=$value
+            ;;
+        icinga_user)
+            [[ -n ${PULSE_ICINGA_USER+x} ]] || PULSE_ICINGA_USER=$value
+            ;;
+        icinga_password)
+            [[ -n ${PULSE_ICINGA_PASSWORD+x} ]] || PULSE_ICINGA_PASSWORD=$value
+            ;;
+        icinga_insecure)
+            [[ -n ${PULSE_ICINGA_INSECURE+x} ]] || PULSE_ICINGA_INSECURE=$value
+            ;;
+        nagios_url)
+            [[ -n ${PULSE_NAGIOS_URL+x} ]] || PULSE_NAGIOS_URL=$value
+            ;;
+        nagios_user)
+            [[ -n ${PULSE_NAGIOS_USER+x} ]] || PULSE_NAGIOS_USER=$value
+            ;;
+        nagios_password)
+            [[ -n ${PULSE_NAGIOS_PASSWORD+x} ]] || PULSE_NAGIOS_PASSWORD=$value
+            ;;
+        connect_timeout)
+            [[ -n ${PULSE_CONNECT_TIMEOUT+x} ]] || PULSE_CONNECT_TIMEOUT=$value
+            ;;
+        max_time)
+            [[ -n ${PULSE_MAX_TIME+x} ]] || PULSE_MAX_TIME=$value
+            ;;
+        *) ops_die "unknown pulse config key: $key" ;;
+    esac
+}
+
+load_config_file() {
+    local file line key value seen
+    file=$1
+    seen='|'
+    while IFS= read -r line || [[ -n $line ]]; do
+        line=${line%$'\r'}
+        case $line in
+            ''|'#'*) continue ;;
+        esac
+        case $line in
+            *=*) ;;
+            *) ops_die "pulse config line must be key=value: $file" ;;
+        esac
+        key=${line%%=*}
+        value=${line#*=}
+        case "$seen" in
+            *"|$key|"*) ops_die "duplicate pulse config key: $key" ;;
+        esac
+        case $key$value in
+            *$'\t'*|*$'\n'*|*$'\r'*) ops_die "control character in pulse config key: $key" ;;
+        esac
+        seen="${seen}${key}|"
+        set_config_value "$key" "$value"
+    done < "$file"
+}
+
+check_config_permissions() {
+    local file mode owner group_other
+    file=$1
+    mode=$(stat -Lc '%a' "$file" 2>/dev/null \
+        || stat -Lf '%Lp' "$file" 2>/dev/null) \
+        || ops_die "could not inspect pulse config permissions: $file"
+    owner=$(stat -Lc '%u' "$file" 2>/dev/null \
+        || stat -Lf '%u' "$file" 2>/dev/null) \
+        || ops_die "could not inspect pulse config ownership: $file"
+    case $mode in
+        [0-7][0-7][0-7]) ;;
+        [0-7][0-7][0-7][0-7]) mode=${mode#?} ;;
+        *) ops_die "could not interpret pulse config permissions: $file" ;;
+    esac
+    group_other=${mode#?}
+    [[ $group_other == 00 ]] \
+        || ops_die "pulse config must not be accessible by group or others (use chmod 600): $file"
+    [[ $owner == "$(id -u)" ]] \
+        || ops_die "pulse config must be owned by the current user: $file"
+}
+
+preview_problem() {
+    local id record source severity host service output changed environment role site age tone
+    id=${1:-}
+    [[ $id =~ ^[0-9]+$ ]] || return 1
+    [[ -n ${PULSE_MAP_FILE:-} && -r $PULSE_MAP_FILE ]] || return 1
+    record=$(awk -F '\t' -v wanted="$id" '$1 == wanted { print; exit }' \
+        "$PULSE_MAP_FILE")
+    [[ -n $record ]] || return 1
+    IFS=$'\t' read -r id source severity host service output changed \
+        environment role site age <<< "$record"
+    case $severity in
+        CRIT) tone=critical ;;
+        WARN|UNKNOWN) tone=warning ;;
+        *) tone=paper ;;
+    esac
+    OPS_COLOR=${OPS_COLOR:-1}
+    OPS_LABEL_WIDTH=13
+    ops_field SEVERITY "$severity" "$tone"
+    ops_field SOURCE "$source"
+    ops_field HOST "$host" paper
+    ops_field ENVIRONMENT "$environment"
+    ops_field SITE "$site"
+    ops_field ROLE "$role"
+    ops_field SERVICE "$service" accent
+    ops_field AGE "$age"
+    printf '\n'
+    ops_field OUTPUT "$output"
+    printf '\n'
+    ops_field ACTION "peek $host" accent
+}
+
+pulse_host_summary() {
+    local wanted source_name source_status source_value summary
+    wanted=$1
+    summary=
+    while IFS=$'\t' read -r source_name source_status; do
+        case $source_status in
+            SKIP) continue ;;
+            ERROR) source_value=ERROR ;;
+            OK)
+                source_value=$(awk -F '\t' -v source="$source_name" -v host="$wanted" '
+                    $1 == source && $3 == host {
+                        rank = ($2 == "CRIT" ? 3 : ($2 == "UNKNOWN" ? 2 : 1))
+                        if (rank > best) { best = rank; value = $2 }
+                    }
+                    END { print value }
+                ' "$sorted_file")
+                [[ -n $source_value ]] || source_value=OK
+                ;;
+        esac
+        summary="${summary}${summary:+ / }${source_name} ${source_value}"
+    done < "$status_file"
+    if (( contract_error_count > 0 )); then
+        summary="${summary}${summary:+ / }ADAPTER CONTRACT ERROR"
+    fi
+    PULSE_HOST_SUMMARY=${summary:-unconfigured}
+}
+
+if [[ ${1:-} == --_preview ]]; then
+    [[ $# -eq 2 ]] || exit 2
+    preview_problem "$2"
+    exit
+fi
+
+inventory_flag=
+config_flag=
+adapter_flag=
+summary_host=
+list_only=0
+print_only=0
+queries=()
+query_count=0
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --inventory)
+            [[ $# -ge 2 ]] || ops_die '--inventory requires a file'
+            [[ -n $2 ]] || ops_die '--inventory requires a nonempty file path'
+            inventory_flag=$2
+            shift
+            ;;
+        --config)
+            [[ $# -ge 2 ]] || ops_die '--config requires a file'
+            [[ -n $2 ]] || ops_die '--config requires a nonempty file path'
+            config_flag=$2
+            shift
+            ;;
+        --adapter-dir)
+            [[ $# -ge 2 ]] || ops_die '--adapter-dir requires a directory'
+            [[ -n $2 ]] || ops_die '--adapter-dir requires a nonempty directory'
+            adapter_flag=$2
+            shift
+            ;;
+        --summary)
+            [[ $# -ge 2 ]] || ops_die '--summary requires a host alias'
+            [[ -n $2 ]] || ops_die '--summary requires a nonempty host alias'
+            summary_host=$2
+            shift
+            ;;
+        --list) list_only=1 ;;
+        --print) print_only=1 ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            while [[ $# -gt 0 ]]; do
+                queries+=("$1")
+                query_count=$((query_count + 1))
+                shift
+            done
+            break
+            ;;
+        -*) ops_die "unknown option: $1" ;;
+        *)
+            queries+=("$1")
+            query_count=$((query_count + 1))
+            ;;
+    esac
+    shift
+done
+
+if [[ -n $summary_host ]] \
+    && (( query_count != 0 || list_only != 0 || print_only != 0 )); then
+    ops_die '--summary cannot be combined with picker options'
+fi
+
+if [[ -n $config_flag ]]; then
+    config_file=$config_flag
+    [[ -r $config_file ]] || ops_die "pulse config is not readable: $config_file"
+elif [[ -n ${PULSE_CONFIG:-} ]]; then
+    config_file=$PULSE_CONFIG
+    [[ -r $config_file ]] || ops_die "pulse config is not readable: $config_file"
+else
+    config_file="$OPS_CONFIG_HOME/pulse.conf"
+fi
+if [[ -r $config_file ]]; then
+    check_config_permissions "$config_file"
+    load_config_file "$config_file"
+fi
+export PULSE_ICINGA_URL PULSE_ICINGA_USER PULSE_ICINGA_PASSWORD \
+    PULSE_ICINGA_INSECURE PULSE_NAGIOS_URL PULSE_NAGIOS_USER \
+    PULSE_NAGIOS_PASSWORD PULSE_CONNECT_TIMEOUT PULSE_MAX_TIME
+
+case ${PULSE_ICINGA_INSECURE:-0} in 0|1) ;; *) ops_die 'icinga_insecure must be 0 or 1' ;; esac
+case ${PULSE_CONNECT_TIMEOUT:-3} in ''|*[!0-9]*) ops_die 'connect_timeout must be an integer' ;; esac
+case ${PULSE_MAX_TIME:-10} in ''|*[!0-9]*) ops_die 'max_time must be an integer' ;; esac
+
+if [[ -n $adapter_flag ]]; then
+    adapter_dir=$adapter_flag
+elif [[ -n ${PULSE_ADAPTER_DIR:-} ]]; then
+    adapter_dir=$PULSE_ADAPTER_DIR
+elif [[ -d $OPS_CONFIG_HOME/pulse.d ]]; then
+    adapter_dir="$OPS_CONFIG_HOME/pulse.d"
+else
+    adapter_dir="$ops_share/pulse.d"
+fi
+[[ -d $adapter_dir ]] || ops_die "adapter directory does not exist: $adapter_dir"
+
+inventory=$(ops_inventory_path "$inventory_flag")
+ops_tmp_open
+records_file="$OPS_TMPDIR/hosts.tsv"
+problems_file="$OPS_TMPDIR/problems.tsv"
+sorted_file="$OPS_TMPDIR/problems-sorted.tsv"
+status_file="$OPS_TMPDIR/sources.tsv"
+: > "$problems_file"
+: > "$status_file"
+ops_inventory_normalize "$inventory" "$records_file"
+
+adapter_count=0
+available_count=0
+contract_error_count=0
+seen_sources='|'
+for adapter in "$adapter_dir"/*; do
+    [[ -x $adapter && -f $adapter ]] || continue
+    adapter_count=$((adapter_count + 1))
+    set +e
+    source_name=$("$adapter" name 2> "$OPS_TMPDIR/adapter-name.err")
+    name_status=$?
+    set -e
+    if [[ $name_status -ne 0 || ! $source_name =~ ^[A-Z][A-Z0-9_-]*$ ]]; then
+        contract_error_count=$((contract_error_count + 1))
+        ops_warn "ignoring adapter with invalid name contract: $adapter"
+        continue
+    fi
+    case "$seen_sources" in
+        *"|$source_name|"*) ops_die "duplicate monitoring source name: $source_name" ;;
+    esac
+    seen_sources="${seen_sources}${source_name}|"
+    adapter_output="$OPS_TMPDIR/adapter-${source_name}.tsv"
+    adapter_error="$OPS_TMPDIR/adapter-${source_name}.err"
+    set +e
+    "$adapter" fetch > "$adapter_output" 2> "$adapter_error"
+    adapter_status=$?
+    set -e
+    case $adapter_status in
+        0)
+            if ! LC_ALL=C awk -F '\t' -v expected="$source_name" -v program="$OPS_PROGRAM" '
+                NF != 6 || $1 != expected || $2 !~ /^(WARN|CRIT|UNKNOWN)$/ ||
+                $3 !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/ || $4 == "" || $5 == "" || $6 !~ /^[0-9]+$/ ||
+                $1 ~ /[[:cntrl:]]/ || $2 ~ /[[:cntrl:]]/ || $3 ~ /[[:cntrl:]]/ ||
+                $4 ~ /[[:cntrl:]]/ || $5 ~ /[[:cntrl:]]/ || $6 ~ /[[:cntrl:]]/ {
+                    printf "%s: malformed %s adapter record on line %d\n", program, expected, NR > "/dev/stderr"
+                    bad = 1
+                }
+                END { exit bad ? 2 : 0 }
+            ' "$adapter_output"; then
+                printf '%s\tERROR\n' "$source_name" >> "$status_file"
+                ops_warn "$source_name returned malformed problem data"
+                continue
+            fi
+            cat "$adapter_output" >> "$problems_file"
+            printf '%s\tOK\n' "$source_name" >> "$status_file"
+            available_count=$((available_count + 1))
+            ;;
+        10)
+            printf '%s\tSKIP\n' "$source_name" >> "$status_file"
+            ;;
+        *)
+            printf '%s\tERROR\n' "$source_name" >> "$status_file"
+            adapter_message=$(LC_ALL=C awk 'NR == 1 { gsub(/[[:cntrl:]]/, " "); print; exit }' \
+                "$adapter_error")
+            ops_warn "$source_name adapter failed${adapter_message:+: $adapter_message}"
+            ;;
+    esac
+done
+(( adapter_count > 0 )) || ops_die "no executable monitoring adapters found: $adapter_dir"
+unset PULSE_ICINGA_PASSWORD PULSE_NAGIOS_PASSWORD
+
+if [[ -s $problems_file ]]; then
+    LC_ALL=C awk -F '\t' -v OFS='\t' '
+        $2 == "CRIT" { rank = 1 }
+        $2 == "UNKNOWN" { rank = 2 }
+        $2 == "WARN" { rank = 3 }
+        { print rank, $0 }
+    ' "$problems_file" \
+        | LC_ALL=C sort -t $'\t' -k1,1n -k7,7n -k4,4 -k5,5 \
+        | cut -f2- > "$sorted_file"
+else
+    : > "$sorted_file"
+fi
+
+status_error_count=$(awk -F '\t' '$2 == "ERROR" { count++ } END { print count + 0 }' \
+    "$status_file")
+error_count=$((status_error_count + contract_error_count))
+source_summary=$(awk -F '\t' '$2 != "SKIP" { printf "%s%s %s", sep, $1, $2; sep=" / " }' \
+    "$status_file")
+if (( contract_error_count > 0 )); then
+    source_summary="${source_summary}${source_summary:+ / }ADAPTER CONTRACT ERROR"
+fi
+
+if [[ -n $summary_host ]]; then
+    ops_inventory_has "$records_file" "$summary_host" \
+        || ops_die "host is not present in the inventory: $summary_host"
+    pulse_host_summary "$summary_host"
+    printf '%s\n' "$PULSE_HOST_SUMMARY"
+    exit 0
+fi
+
+if [[ $available_count -eq 0 ]]; then
+    ops_die "no monitoring source is configured and reachable; see $ops_share/pulse.conf.example"
+fi
+
+if [[ $list_only -eq 1 ]]; then
+    printf 'source\tseverity\thost\tservice\toutput\tlast_state_change\n'
+    cat "$sorted_file"
+    (( error_count == 0 )) || exit 3
+    exit 0
+fi
+
+problem_count=$(awk 'END { print NR + 0 }' "$sorted_file")
+if [[ $problem_count -eq 0 ]]; then
+    printf '\n'
+    if (( error_count > 0 )); then
+        ops_heading "MONITORING PROBLEM INDEX / INCOMPLETE / ${error_count} SOURCE ERROR"
+    else
+        ops_heading 'MONITORING PROBLEM INDEX / 0 OPEN'
+    fi
+    printf '%s\n' '────────────────────────────────────────────────────────'
+    if (( error_count > 0 )); then
+        printf 'No problems returned by reachable sources; the index is incomplete.\n'
+        ops_field SOURCES "${source_summary:-unconfigured}" warning
+        exit 3
+    fi
+    printf 'No active hard-state service problems.\n'
+    ops_field SOURCES "${source_summary:-unconfigured}" ok
+    exit 0
+fi
+
+map_file="$OPS_TMPDIR/map.tsv"
+choices_file="$OPS_TMPDIR/choices.tsv"
+: > "$map_file"
+problem_id=0
+while IFS=$'\t' read -r source severity host service output changed; do
+    problem_id=$((problem_id + 1))
+    inventory_record=$(ops_inventory_find "$records_file" "$host")
+    if [[ -n $inventory_record ]]; then
+        IFS=$'\t' read -r _ environment role site <<< "$inventory_record"
+    else
+        environment=-
+        role=-
+        site=-
+    fi
+    age=$(ops_age "$changed")
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$problem_id" "$source" "$severity" "$host" "$service" "$output" \
+        "$changed" "$environment" "$role" "$site" "$age" >> "$map_file"
+done < "$sorted_file"
+
+ops_need "$OPS_FZF_BIN"
+picker_label="MONITORING PROBLEM INDEX / ${problem_count} OPEN"
+if (( error_count > 0 )); then
+    picker_label="$picker_label / ${error_count} SOURCE ERROR"
+fi
+ops_fzf_base "$picker_label" "$problem_count"
+if (( OPS_COLUMNS < 64 )); then
+    header='SEV      AGE    HOST                 SERVICE'
+    while IFS=$'\t' read -r id source severity host service output changed environment role site age; do
+        printf '%s\t%s %s %s %s %s %s %s %s\t%-8s %-6s %-20s %s\n' \
+            "$id" "$source" "$severity" "$host" "$service" "$output" "$environment" "$role" "$site" \
+            "$severity" "$age" "$host" "$service"
+    done < "$map_file" > "$choices_file"
+elif (( OPS_COLUMNS < 104 )); then
+    header='SEV      AGE    SOURCE   HOST                         SERVICE'
+    while IFS=$'\t' read -r id source severity host service output changed environment role site age; do
+        printf '%s\t%s %s %s %s %s %s %s %s\t%-8s %-6s %-8s %-28s %s\n' \
+            "$id" "$source" "$severity" "$host" "$service" "$output" "$environment" "$role" "$site" \
+            "$severity" "$age" "$source" "$host" "$service"
+    done < "$map_file" > "$choices_file"
+else
+    header='SEV      AGE    SOURCE   ENV    HOST                         SERVICE'
+    while IFS=$'\t' read -r id source severity host service output changed environment role site age; do
+        printf '%s\t%s %s %s %s %s %s %s %s\t%-8s %-6s %-8s %-6s %-28s %s\n' \
+            "$id" "$source" "$severity" "$host" "$service" "$output" "$environment" "$role" "$site" \
+            "$severity" "$age" "$source" "$environment" "$host" "$service"
+    done < "$map_file" > "$choices_file"
+fi
+header="${header}"$'\n'"SOURCES / ${source_summary:-unconfigured}"$'\n''ENTER PEEK  CTRL-S SSH  CTRL-/ PREVIEW  ESC CANCEL'
+
+query=
+if (( query_count > 0 )); then
+    for query_part in "${queries[@]}"; do
+        query="${query}${query:+ }${query_part}"
+    done
+fi
+self_path="$script_dir/$(basename -- "${BASH_SOURCE[0]}")"
+printf -v preview_command '%q --_preview {1}' "$self_path"
+export PULSE_MAP_FILE="$map_file"
+export OPS_COLOR=1
+selection_file="$OPS_TMPDIR/selection"
+fzf_args=(
+    "${OPS_FZF_BASE[@]}"
+    '--delimiter=\t'
+    '--with-nth=3'
+    '--nth=1,2'
+    '--expect=ctrl-s'
+    '--prompt=FILTER / '
+    "--header=$header"
+    "--query=$query"
+    "--preview=$preview_command"
+    '--preview-label= PROBLEM RECORD '
+    "--preview-window=$OPS_PREVIEW_WINDOW"
+    '--bind=ctrl-/:toggle-preview'
+)
+set +e
+FZF_DEFAULT_OPTS='' "$OPS_FZF_BIN" "${fzf_args[@]}" \
+    < "$choices_file" > "$selection_file"
+fzf_status=$?
+set -e
+case $fzf_status in
+    0) ;;
+    1|130) exit 0 ;;
+    *) ops_die "fzf exited with status $fzf_status" ;;
+esac
+
+selected_key=$(sed -n '1p' "$selection_file")
+selected_line=$(sed -n '2p' "$selection_file")
+if [[ -z $selected_line ]]; then
+    selected_line=$selected_key
+    selected_key=
+fi
+selected_id=${selected_line%%$'\t'*}
+[[ $selected_id =~ ^[0-9]+$ ]] \
+    || ops_die 'picker returned an invalid problem record'
+selected_record=$(awk -F '\t' -v wanted="$selected_id" \
+    '$1 == wanted { print; exit }' "$map_file")
+[[ -n $selected_record ]] || ops_die 'picker returned a problem outside the index'
+IFS=$'\t' read -r _ _ _ selected_host _ <<< "$selected_record"
+
+if [[ $print_only -eq 1 ]]; then
+    printf '%s\n' "$selected_host"
+    exit 0
+fi
+
+if [[ $selected_key == ctrl-s ]]; then
+    ops_need "$OPS_SSH_BIN"
+    ops_tmp_cleanup
+    unset PULSE_MAP_FILE OPS_COLOR
+    exec "$OPS_SSH_BIN" -- "$selected_host"
+fi
+
+ops_need peek
+pulse_host_summary "$selected_host"
+export PEEK_MONITORING_STATE="$PULSE_HOST_SUMMARY"
+ops_tmp_cleanup
+unset PULSE_MAP_FILE OPS_COLOR
+exec peek --inventory "$inventory" "$selected_host"
