@@ -5,7 +5,7 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 stamp=$(date '+%Y%m%d-%H%M%S')
 install_ghostty=1
-install_shell=0
+install_shell=1
 
 usage() {
     cat <<'EOF'
@@ -13,8 +13,8 @@ Usage: ./install-terminal.sh [options]
 
 Options:
   --no-ghostty  Skip Ghostty links (used by WSL/Windows Terminal).
-  --with-shell  Install the GNU dircolors adapter and source it from the
-                current Bash or Zsh startup file.
+  --no-shell    Skip the portable Bash/Zsh prompt and GNU dircolors adapter.
+  --with-shell  Explicitly enable the shell layer (the default).
   -h, --help    Show this help.
 EOF
 }
@@ -26,6 +26,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --with-shell)
             install_shell=1
+            ;;
+        --no-shell)
+            install_shell=0
             ;;
         -h|--help)
             usage
@@ -79,7 +82,7 @@ ensure_shell_source() {
         : > "$target_path"
     fi
 
-    printf '\n# Protocol Ink / portable GNU color semantics\n%s\n' "$source_line" >> "$target_path"
+    printf '\n# Protocol Ink / portable shell layer\n%s\n' "$source_line" >> "$target_path"
     printf 'source  %s\n' "$target_path"
 }
 
@@ -115,6 +118,7 @@ link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-i
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
     link_path "$repo_root/shell/protocol-ink.dircolors" "$protocol_dir/dircolors"
+    link_path "$repo_root/shell/protocol-ink-prompt.sh" "$protocol_dir/prompt.sh"
     link_path "$repo_root/shell/protocol-ink.sh" "$protocol_dir/shell.sh"
 
     shell_name=$(basename -- "${SHELL:-sh}")
@@ -142,5 +146,5 @@ if [ "$install_ghostty" -eq 1 ]; then
     printf 'Reload Ghostty to apply its profile.\n'
 fi
 if [ "$install_shell" -eq 1 ]; then
-    printf 'Start a new shell to apply GNU file colors.\n'
+    printf 'Start a new shell to apply the index prompt and GNU file colors.\n'
 fi

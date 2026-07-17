@@ -8,7 +8,7 @@ usage() {
     cat <<'EOF'
 Usage: ./install-wsl.sh [--no-default]
 
-Links the Neovim, Zellij, and GNU dircolors modules inside WSL, installs the
+Links the Neovim, Zellij, and portable shell modules inside WSL, installs the
 Protocol Ink fragment into Windows Terminal, and makes its WSL profile the
 Windows Terminal default.
 

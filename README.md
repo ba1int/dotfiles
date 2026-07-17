@@ -9,12 +9,16 @@ structural teal, and coral only for intervention states.
 ### macOS or Linux with Ghostty
 
 ```sh
+git clone git@github.com:ba1int/dotfiles.git ~/dotfiles
+cd ~/dotfiles
 ./install-terminal.sh
 ```
 
 The installer detects Ghostty's platform-specific main config location, links
 its custom theme into the XDG theme search path, backs up conflicting live
-files, and keeps this repository as the source of truth.
+files, installs the portable shell layer, and keeps this repository as the
+source of truth. Use `./install-terminal.sh --no-shell` when a machine should
+keep its existing prompt.
 
 ### WSL 2 with Windows Terminal
 
@@ -22,13 +26,15 @@ TX-02 must be installed in Windows, while Neovim and Zellij must be installed
 inside WSL. From the cloned repository inside WSL, run:
 
 ```sh
+git clone git@github.com:ba1int/dotfiles.git ~/dotfiles
+cd ~/dotfiles
 ./install-wsl.sh
 ```
 
 That one command:
 
 - links the Neovim and Zellij configuration inside WSL;
-- installs the GNU `LS_COLORS` adapter for matching file semantics;
+- installs the Bash/Zsh index prompt and matching GNU `LS_COLORS` semantics;
 - installs a modular Windows Terminal JSON fragment for Protocol Ink;
 - creates a dedicated `Protocol Ink / WSL` profile using TX-02; and
 - makes that profile the Windows Terminal default.
@@ -54,7 +60,10 @@ needed.
 - `windows-terminal/install.ps1` installs that fragment without folding it
   into the repository or replacing the user's complete settings file.
 - `shell/protocol-ink.dircolors` maps GNU file categories onto the same ANSI
-  semantics used by Ghostty, and `shell/protocol-ink.sh` loads it.
+  semantics used by Ghostty.
+- `shell/protocol-ink-prompt.sh` renders the current command as a Manual /
+  Index record using real history, path, Git, dirty, and exit-status metadata.
+- `shell/protocol-ink.sh` composes the portable prompt and GNU color adapter.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
   Zellij configuration and defines explicit list/table selection states for
   keyboard-driven plugins such as the session manager.
@@ -64,6 +73,21 @@ needed.
   clean Neovim-specific interaction layer.
 - `vim/vimrc` preserves the existing shared keybindings and keeps Everforest
   as a Vim-only fallback; Neovim explicitly opts into Protocol Ink.
+
+## Shell record
+
+The Bash/Zsh prompt treats each command as an index entry:
+
+```text
+421 / ~/Documents/setup / git:main*
+    $
+```
+
+The first field is the shell's real history number. Git context appears only
+inside a repository, `*` marks a dirty worktree, and `exit:N` appears only
+after a failed command. Set `PROTOCOL_INK_PROMPT=0` before loading
+`protocol-ink/shell.sh` to keep the shared GNU file colors without replacing
+an existing prompt.
 
 Ghostty loads an optional `local.ghostty` last. Put it in the live Ghostty
 config directory when a machine needs a different font size or padding; it
