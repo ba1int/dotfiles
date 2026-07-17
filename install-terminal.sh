@@ -165,6 +165,7 @@ link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protoc
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
+link_path "$repo_root/bin/hop" "$HOME/.local/bin/hop"
 
 if [ "$install_lab" -eq 1 ]; then
     link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"

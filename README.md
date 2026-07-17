@@ -66,6 +66,8 @@ needed.
 - `shell/protocol-ink.sh` composes the portable prompt and GNU color adapter.
 - `bin/lab` is a location-independent launcher for the optional standalone
   monitoring lab and keeps its implementation out of the dotfiles repository.
+- `bin/hop` is a portable, inventory-backed SSH host index with local route
+  previews and no background reachability probes.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
   Zellij configuration and defines explicit list/table selection states for
   keyboard-driven plugins such as the session manager.
@@ -132,6 +134,34 @@ web tunnels and Zellij handoff.
 
 If the standalone lab is absent, the terminal setup behaves normally; only the
 `lab` command reports that the optional project has not been found.
+
+## SSH host index
+
+Run `hop` to filter hosts by alias, environment, role, or site, inspect the
+resolved local SSH route, and connect with Enter. `Ctrl-/` toggles the record
+preview and Escape cancels. Queries can start at the prompt:
+
+```sh
+hop prod middleware
+```
+
+The picker reads one authoritative tab-separated inventory. Set its location
+per machine so the dotfiles remain unchanged:
+
+```sh
+export HOP_INVENTORY="$HOME/work-inventory/hosts.tsv"
+```
+
+The required schema is deliberately small and scales to a fleet export:
+
+```text
+name<TAB>environment<TAB>role<TAB>site
+app01.example.net<TAB>PROD<TAB>middleware<TAB>dc1
+```
+
+`--print` returns a selection for scripts without connecting, while
+`--select HOST --print` is a noninteractive validation seam. SSH configuration
+remains the source of truth for usernames, ports, keys, and jump hosts.
 
 The lab's isolated Ubuntu workstation installs this same configuration with
 `./install-terminal.sh --no-ghostty --with-shell --no-lab`. That internal mode
