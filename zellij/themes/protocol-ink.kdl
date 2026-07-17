@@ -1,0 +1,15 @@
+themes {
+    protocol-ink {
+        fg 232 225 210
+        bg 23 24 21
+        black 41 42 37
+        red 239 91 76
+        green 134 173 139
+        yellow 201 183 111
+        blue 126 158 174
+        magenta 169 141 160
+        cyan 120 184 179
+        white 243 240 231
+        orange 216 112 87
+    }
+}

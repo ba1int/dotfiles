@@ -1,0 +1,38 @@
+# Protocol Paper / Ink Sheet 01
+# Deep ink field, warm paper type, structural teal, editorial coral.
+
+background = #171815
+foreground = #E8E1D2
+
+cursor-color = #EF5B4C
+cursor-text = #171815
+
+selection-background = #E8E1D2
+selection-foreground = #171815
+
+search-background = #31504D
+search-foreground = #F3F0E7
+search-selected-background = #EF5B4C
+search-selected-foreground = #171815
+
+split-divider-color = #44463F
+unfocused-split-fill = #171815
+
+# ANSI compatibility inks. The everyday surface remains neutral; hues are
+# reserved for program semantics rather than decoration.
+palette = 0=#292A25
+palette = 1=#D85B50
+palette = 2=#86AD8B
+palette = 3=#C9B76F
+palette = 4=#7E9EAE
+palette = 5=#A98DA0
+palette = 6=#78B8B3
+palette = 7=#E8E1D2
+palette = 8=#666960
+palette = 9=#EF5B4C
+palette = 10=#9CC7A0
+palette = 11=#E1D08A
+palette = 12=#97B9C8
+palette = 13=#C4A9BB
+palette = 14=#9ACEC9
+palette = 15=#F3F0E7

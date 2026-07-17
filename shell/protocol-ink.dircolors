@@ -1,0 +1,32 @@
+# Protocol Ink / GNU dircolors
+# Structural blue for directories, teal for links, coral for exceptions.
+
+TERM xterm
+TERM xterm-256color
+TERM screen
+TERM screen-256color
+TERM tmux
+TERM tmux-256color
+TERM linux
+TERM cygwin
+
+NORMAL 00
+FILE 00
+RESET 00
+DIR 34
+LINK 36
+MULTIHARDLINK 35
+FIFO 33
+SOCK 35
+DOOR 35
+BLK 33
+CHR 33
+ORPHAN 31
+MISSING 31
+EXEC 32
+SETUID 30;41
+SETGID 30;43
+CAPABILITY 30;41
+STICKY_OTHER_WRITABLE 30;42
+OTHER_WRITABLE 30;43
+STICKY 37;44

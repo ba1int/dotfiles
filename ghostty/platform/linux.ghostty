@@ -1,0 +1,2 @@
+# Let the desktop environment own the outer frame.
+window-decoration = auto

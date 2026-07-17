@@ -1,0 +1,6 @@
+# Machine-only overrides. Copy this to local.ghostty in Ghostty's live
+# config directory; it is intentionally not managed by the installer.
+
+# font-size = 14
+# window-padding-x = 8
+# window-padding-y = 8

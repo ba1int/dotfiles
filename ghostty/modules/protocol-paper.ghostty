@@ -1,0 +1,30 @@
+# Protocol Paper / clean-digital instrument mode
+
+# Typography
+font-family = TX-02
+font-style = Regular
+font-style-bold = SemiBold
+font-style-italic = Oblique
+font-style-bold-italic = SemiBold Oblique
+font-size = 14.5
+font-feature = -calt,-liga,-dlig
+adjust-cell-height = 8%
+
+# Color system
+theme = protocol-ink
+
+# Page geometry
+window-padding-x = 12
+window-padding-y = 10
+window-padding-balance = true
+window-padding-color = background
+
+# Mechanical interaction
+cursor-style = block
+cursor-style-blink = false
+mouse-hide-while-typing = true
+
+# Clean digital materiality
+background-opacity = 1
+background-blur = false
+unfocused-split-opacity = 0.92

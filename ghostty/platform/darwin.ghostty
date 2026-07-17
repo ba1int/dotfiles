@@ -1,0 +1,5 @@
+# Native frame with the tab index integrated into the titlebar.
+window-decoration = auto
+macos-titlebar-style = tabs
+macos-titlebar-proxy-icon = hidden
+window-title-font-family = TX-02

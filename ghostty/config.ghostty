@@ -1,0 +1,5 @@
+# Protocol Ink / entrypoint
+# Included files are loaded in order; local.ghostty wins when present.
+config-file = modules/protocol-paper.ghostty
+config-file = ?platform.ghostty
+config-file = ?local.ghostty

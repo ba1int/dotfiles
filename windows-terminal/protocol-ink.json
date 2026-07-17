@@ -1,0 +1,51 @@
+{
+  "profiles": [
+    {
+      "guid": "{b5bd7225-4a2b-442b-ac43-649a8f8b7660}",
+      "name": "Protocol Ink / WSL",
+      "commandline": "wsl.exe",
+      "startingDirectory": "~",
+      "colorScheme": "Protocol Ink",
+      "font": {
+        "face": "TX-02",
+        "size": 14,
+        "weight": "normal",
+        "features": {
+          "calt": 0,
+          "dlig": 0,
+          "liga": 0
+        }
+      },
+      "cursorShape": "filledBox",
+      "padding": "12, 10, 12, 10",
+      "opacity": 100,
+      "useAcrylic": false,
+      "scrollbarState": "hidden"
+    }
+  ],
+  "schemes": [
+    {
+      "name": "Protocol Ink",
+      "background": "#171815",
+      "foreground": "#E8E1D2",
+      "cursorColor": "#EF5B4C",
+      "selectionBackground": "#E8E1D2",
+      "black": "#292A25",
+      "red": "#D85B50",
+      "green": "#86AD8B",
+      "yellow": "#C9B76F",
+      "blue": "#7E9EAE",
+      "purple": "#A98DA0",
+      "cyan": "#78B8B3",
+      "white": "#E8E1D2",
+      "brightBlack": "#666960",
+      "brightRed": "#EF5B4C",
+      "brightGreen": "#9CC7A0",
+      "brightYellow": "#E1D08A",
+      "brightBlue": "#97B9C8",
+      "brightPurple": "#C4A9BB",
+      "brightCyan": "#9ACEC9",
+      "brightWhite": "#F3F0E7"
+    }
+  ]
+}

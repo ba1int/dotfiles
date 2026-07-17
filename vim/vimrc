@@ -1,0 +1,107 @@
+set nocompatible
+
+filetype plugin indent on
+syntax on
+
+if has('termguicolors')
+  set termguicolors
+endif
+
+if exists('&guifont')
+  set guifont=TX-02:h14
+endif
+
+if exists('&guicursor')
+  set guicursor=a:hor20-blinkwait0-blinkon0-blinkoff0
+endif
+
+set number
+set cursorline
+set mouse=a
+set clipboard=unnamedplus
+set ignorecase
+set smartcase
+set hlsearch
+set incsearch
+set splitright
+set splitbelow
+set scrolloff=4
+set signcolumn=yes
+set updatetime=250
+
+function! s:project_root() abort
+  let l:start = expand('%:p:h')
+  if empty(l:start)
+    let l:start = getcwd()
+  endif
+
+  if executable('git')
+    let l:root = trim(system('git -C ' . shellescape(l:start) . ' rev-parse --show-toplevel 2>/dev/null'))
+    if v:shell_error == 0 && !empty(l:root)
+      return l:root
+    endif
+  endif
+
+  return l:start
+endfunction
+
+let $FZF_DEFAULT_COMMAND = 'rg --files --hidden --glob "!.git" --glob "!*.sw?"'
+let $BAT_THEME = 'ansi'
+let g:fzf_vim = {
+      \ 'preview_window': ['hidden,right,50%,<70(up,40%)', 'ctrl-/']
+      \ }
+
+function! s:project_files() abort
+  call fzf#vim#files(s:project_root(), fzf#vim#with_preview(), 0)
+endfunction
+
+function! s:project_rg(...) abort
+  let l:query = a:0 ? a:1 : ''
+  let l:spec = fzf#vim#with_preview({ 'dir': s:project_root() })
+  let l:prefix = 'rg --column --line-number --no-heading --color=always --smart-case --hidden --glob ' . fzf#shellescape('!.git') . ' -- '
+  call fzf#vim#grep2(l:prefix, l:query, l:spec, 0)
+endfunction
+
+command! ProjectFiles call s:project_files()
+command! -nargs=* ProjectRG call s:project_rg(<q-args>)
+
+nnoremap <silent> <Bslash> :ProjectRG<CR>
+nnoremap <silent> <C-p> :ProjectFiles<CR>
+
+if !get(g:, 'protocol_ink_nvim', 0)
+function! s:macos_background() abort
+  if !executable('defaults')
+    return &background ==# 'dark' ? 'dark' : 'light'
+  endif
+
+  let l:style = trim(system('defaults read -g AppleInterfaceStyle 2>/dev/null'))
+  return l:style ==# 'Dark' ? 'dark' : 'light'
+endfunction
+
+function! s:apply_everforest(mode) abort
+  if a:mode ==# 'dark'
+    set background=dark
+  else
+    set background=light
+  endif
+
+  let g:everforest_background = 'medium'
+  let g:everforest_better_performance = 1
+  colorscheme everforest
+endfunction
+
+function! s:refresh_everforest() abort
+  call s:apply_everforest(s:macos_background())
+endfunction
+
+augroup everforest_theme
+  autocmd!
+  autocmd VimEnter,FocusGained * call s:refresh_everforest()
+augroup END
+
+command! EverforestRefresh call s:refresh_everforest()
+command! EverforestDark call s:apply_everforest('dark')
+command! EverforestLight call s:apply_everforest('light')
+
+call s:refresh_everforest()
+endif

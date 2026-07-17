@@ -1,0 +1,146 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+stamp=$(date '+%Y%m%d-%H%M%S')
+install_ghostty=1
+install_shell=0
+
+usage() {
+    cat <<'EOF'
+Usage: ./install-terminal.sh [options]
+
+Options:
+  --no-ghostty  Skip Ghostty links (used by WSL/Windows Terminal).
+  --with-shell  Install the GNU dircolors adapter and source it from the
+                current Bash or Zsh startup file.
+  -h, --help    Show this help.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        --no-ghostty)
+            install_ghostty=0
+            ;;
+        --with-shell)
+            install_shell=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'Unknown option: %s\n\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+link_path() {
+    source_path=$1
+    target_path=$2
+
+    mkdir -p "$(dirname -- "$target_path")"
+
+    if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
+        printf 'ok      %s\n' "$target_path"
+        return
+    fi
+
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+        backup_path="${target_path}.backup-${stamp}"
+        mv "$target_path" "$backup_path"
+        printf 'backup  %s -> %s\n' "$target_path" "$backup_path"
+    fi
+
+    ln -s "$source_path" "$target_path"
+    printf 'link    %s -> %s\n' "$target_path" "$source_path"
+}
+
+ensure_shell_source() {
+    target_path=$1
+    source_line='[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ink/shell.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ink/shell.sh"'
+
+    if [ -f "$target_path" ] && grep -F "$source_line" "$target_path" >/dev/null 2>&1; then
+        printf 'ok      %s\n' "$target_path"
+        return
+    fi
+
+    if [ -e "$target_path" ]; then
+        backup_path="${target_path}.backup-${stamp}"
+        cp "$target_path" "$backup_path"
+        printf 'backup  %s -> %s\n' "$target_path" "$backup_path"
+    else
+        mkdir -p "$(dirname -- "$target_path")"
+        : > "$target_path"
+    fi
+
+    printf '\n# Protocol Ink / portable GNU color semantics\n%s\n' "$source_line" >> "$target_path"
+    printf 'source  %s\n' "$target_path"
+}
+
+zellij_dir="$config_home/zellij"
+nvim_dir="$config_home/nvim"
+
+if [ "$install_ghostty" -eq 1 ]; then
+    case $(uname -s) in
+        Darwin)
+            ghostty_dir="$HOME/Library/Application Support/com.mitchellh.ghostty"
+            ghostty_platform="$repo_root/ghostty/platform/darwin.ghostty"
+            ;;
+        *)
+            ghostty_dir="$config_home/ghostty"
+            ghostty_platform="$repo_root/ghostty/platform/linux.ghostty"
+            ;;
+    esac
+
+    ghostty_theme_dir="$config_home/ghostty/themes"
+    link_path "$repo_root/ghostty/config.ghostty" "$ghostty_dir/config.ghostty"
+    link_path "$repo_root/ghostty/modules" "$ghostty_dir/modules"
+    link_path "$repo_root/ghostty/themes/protocol-ink" "$ghostty_theme_dir/protocol-ink"
+    link_path "$ghostty_platform" "$ghostty_dir/platform.ghostty"
+fi
+
+link_path "$repo_root/zellij/config.kdl" "$zellij_dir/config.kdl"
+link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protocol-ink.kdl"
+
+link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
+link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
+link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
+
+if [ "$install_shell" -eq 1 ]; then
+    protocol_dir="$config_home/protocol-ink"
+    link_path "$repo_root/shell/protocol-ink.dircolors" "$protocol_dir/dircolors"
+    link_path "$repo_root/shell/protocol-ink.sh" "$protocol_dir/shell.sh"
+
+    shell_name=$(basename -- "${SHELL:-sh}")
+    case $shell_name in
+        bash)
+            ensure_shell_source "$HOME/.bashrc"
+            ;;
+        zsh)
+            ensure_shell_source "$HOME/.zshrc"
+            ;;
+        *)
+            if [ -f "$HOME/.bashrc" ]; then
+                ensure_shell_source "$HOME/.bashrc"
+            elif [ -f "$HOME/.zshrc" ]; then
+                ensure_shell_source "$HOME/.zshrc"
+            else
+                printf 'warn    shell adapter linked, but %s has no supported startup file\n' "$shell_name" >&2
+            fi
+            ;;
+    esac
+fi
+
+printf '\nProtocol Ink is linked. Restart Neovim and start a new Zellij session.\n'
+if [ "$install_ghostty" -eq 1 ]; then
+    printf 'Reload Ghostty to apply its profile.\n'
+fi
+if [ "$install_shell" -eq 1 ]; then
+    printf 'Start a new shell to apply GNU file colors.\n'
+fi
