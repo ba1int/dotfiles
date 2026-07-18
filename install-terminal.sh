@@ -3,11 +3,9 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
-data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 stamp=$(date '+%Y%m%d-%H%M%S')
 install_ghostty=1
 install_shell=1
-install_lab=1
 
 usage() {
     cat <<'EOF'
@@ -17,7 +15,6 @@ Options:
   --no-ghostty  Skip Ghostty links (used by WSL/Windows Terminal).
   --no-shell    Skip the portable Bash/Zsh prompt and GNU dircolors adapter.
   --with-shell  Explicitly enable the shell layer (the default).
-  --no-lab      Skip the optional monitoring-lab launcher and SSH include.
   -h, --help    Show this help.
 EOF
 }
@@ -32,9 +29,6 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-shell)
             install_shell=0
-            ;;
-        --no-lab)
-            install_lab=0
             ;;
         -h|--help)
             usage
@@ -92,52 +86,6 @@ ensure_shell_source() {
     printf 'source  %s\n' "$target_path"
 }
 
-ensure_ssh_include() {
-    target_path=$1
-    include_path=$2
-    escaped_include_path=$(printf '%s' "$include_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    include_line="Include \"$escaped_include_path\""
-    legacy_include_line="Include $include_path"
-
-    if [ -f "$target_path" ] && grep -Fqx "$include_line" "$target_path" >/dev/null 2>&1; then
-        printf 'ok      %s\n' "$target_path"
-        return
-    fi
-
-    mkdir -p "$(dirname -- "$target_path")"
-    if [ -L "$target_path" ] && [ ! -e "$target_path" ]; then
-        printf 'error   refusing to replace broken SSH config symlink: %s\n' "$target_path" >&2
-        exit 1
-    fi
-    if [ -e "$target_path" ]; then
-        backup_path="${target_path}.backup-${stamp}"
-        cp -p "$target_path" "$backup_path"
-        printf 'backup  %s -> %s\n' "$target_path" "$backup_path"
-    fi
-
-    temporary_path="${target_path}.protocol-ink.$$"
-    {
-        printf '# Optional local monitoring lab aliases\n%s\n\n' "$include_line"
-        if [ -f "$target_path" ]; then
-            while IFS= read -r existing_line || [ -n "$existing_line" ]; do
-                [ "$existing_line" = '# Optional local monitoring lab aliases' ] && continue
-                [ "$existing_line" = "$include_line" ] && continue
-                [ "$existing_line" = "$legacy_include_line" ] && continue
-                printf '%s\n' "$existing_line"
-            done < "$target_path"
-        fi
-    } > "$temporary_path"
-
-    if [ -L "$target_path" ]; then
-        cat "$temporary_path" > "$target_path"
-        rm -f "$temporary_path"
-    else
-        chmod 0600 "$temporary_path"
-        mv "$temporary_path" "$target_path"
-    fi
-    printf 'include %s -> %s\n' "$target_path" "$include_path"
-}
-
 zellij_dir="$config_home/zellij"
 nvim_dir="$config_home/nvim"
 
@@ -169,17 +117,7 @@ link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/protocol-clipboard.vim" "$nvim_dir/protocol-clipboard.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
-link_path "$repo_root/lib/protocol-ops" "$data_home/protocol-ops"
-link_path "$repo_root/bin/hop" "$HOME/.local/bin/hop"
-link_path "$repo_root/bin/peek" "$HOME/.local/bin/peek"
-link_path "$repo_root/bin/kb" "$HOME/.local/bin/kb"
-link_path "$repo_root/bin/pulse" "$HOME/.local/bin/pulse"
 link_path "$repo_root/bin/zellij-help" "$HOME/.local/bin/zellij-help"
-
-if [ "$install_lab" -eq 1 ]; then
-    link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"
-    ensure_ssh_include "$HOME/.ssh/config" "$config_home/monitoring-lab/ssh_config"
-fi
 
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
@@ -216,7 +154,7 @@ if [ "$install_shell" -eq 1 ]; then
 fi
 
 missing_tools=''
-for tool_name in nvim zellij fzf rg curl jq ssh; do
+for tool_name in nvim zellij fzf rg; do
     if ! command -v "$tool_name" >/dev/null 2>&1; then
         missing_tools="$missing_tools $tool_name"
     fi

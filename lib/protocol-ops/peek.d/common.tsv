@@ -1,8 +1,0 @@
-id	label	command
-system	SYSTEM	if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s\n' "${PRETTY_NAME:-${NAME:-Linux}}"; else uname -sr; fi
-kernel	KERNEL	uname -sr
-uptime	UPTIME	awk '{ s=int($1); d=int(s/86400); h=int((s%86400)/3600); m=int((s%3600)/60); if (d>0) printf "%dd %02dh %02dm\n",d,h,m; else printf "%02dh %02dm\n",h,m }' /proc/uptime
-load	LOAD	awk '{ print $1 " / " $2 " / " $3 }' /proc/loadavg
-memory	MEMORY	awk '/MemTotal:/{t=$2}/MemAvailable:/{a=$2} END { if (t>0) printf "%d%% used / %d MiB free\n", ((t-a)*100/t), (a/1024); else print "unavailable" }' /proc/meminfo
-disk_root	DISK /	df -P / | awk 'NR==2 { print $5 " used / " int($4/1024) " MiB free" }'
-failed_units	FAILED UNITS	if command -v systemctl >/dev/null 2>&1; then n=$(systemctl --failed --no-legend 2>/dev/null | awk 'END { print NR + 0 }'); printf '%s\n' "$n"; else printf 'systemd unavailable\n'; fi

@@ -61,7 +61,7 @@ else
 fi
 
 missing_tools=''
-for tool_name in nvim zellij fzf rg curl jq ssh; do
+for tool_name in nvim zellij fzf rg; do
     if ! command -v "$tool_name" >/dev/null 2>&1; then
         missing_tools="$missing_tools $tool_name"
     fi
@@ -69,7 +69,7 @@ done
 
 if [ -n "$missing_tools" ]; then
     if command -v apt-get >/dev/null 2>&1; then
-        printf '\nhint    Ubuntu/Debian base tools: sudo apt-get install fzf ripgrep curl jq openssh-client\n' >&2
+        printf '\nhint    Ubuntu/Debian base tools: sudo apt-get install fzf ripgrep\n' >&2
     fi
 fi
 
