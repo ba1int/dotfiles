@@ -84,6 +84,7 @@ sessions, package storage, and model selection remain machine-local:
 | Remote `ssh_read` | allow |
 | Remote `ssh_write`, `ssh_edit` | deny |
 | Remote `ssh_bash` | ask |
+| Protocol Ops local inventory lookup | allow |
 | Protocol Ops task/checkpoint state | allow |
 | Protocol Ops audited observation batches | allow |
 | Protocol Ops typed Icinga object/check queries | allow |
@@ -139,9 +140,19 @@ The Pi installer also links one dependency-free, repository-owned extension.
 It borrows the useful parts of Tura's command batches and runtime manuals while
 keeping remote mutation completely outside the new path:
 
+- `ops_inventory` performs a bounded, case-insensitive local inventory search
+  without SSH, API access, confirmation, or task authority. Natural shorthand
+  such as `prod` plus `mq` may match hostname fragments even when the canonical
+  role is `messaging`; operational access still requires a later `ops_task`.
+  Returned rows become model context. More than twenty matches fails closed
+  without returning a silently truncated subset, so broad fleet enumeration is
+  not the intended path. Multiple matches are explicitly ambiguous and must all
+  be reported or refined. Repeated narrow searches can still enumerate the
+  inventory: the cap limits context and ambiguity, not confidentiality.
 - `ops_task` declares an exact task type, objective, ticket, and either literal
-  inventory hosts or one exact `environment`/`role`/`site` filter. Filters use
-  AND matching, resolve in inventory order, and must produce at most eight
+  inventory hosts or one exact `environment`/`role`/`site` filter. Filter values
+  are case-insensitive but otherwise exact, use AND matching, resolve in
+  inventory order, and must produce at most eight
   hosts. The dialog shows and binds only the expanded literal list for 12 hours;
   the filter is never persisted as authority.
 - `ops_observe` expands audited profile/check IDs, validates the complete batch,

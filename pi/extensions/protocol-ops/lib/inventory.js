@@ -8,6 +8,8 @@ import {
 } from "./validation.js";
 
 const INVENTORY_FILTER_FIELDS = ["environment", "role", "site"];
+const INVENTORY_SEARCH_FIELDS = ["name", ...INVENTORY_FILTER_FIELDS];
+const SAFE_SEARCH_TERM = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export function resolveInventoryPath(env = process.env) {
 	if (env.OPS_INVENTORY?.trim()) return env.OPS_INVENTORY.trim();
@@ -33,6 +35,9 @@ export function parseInventory(text, source = "inventory") {
 		}
 		const [name, environment, role, site] = fields;
 		assertSafeHost(name, `${source}:${lineNumber} host`);
+		if ([environment, role, site].some((field) => field.length > 128)) {
+			throw new Error(`${source}:${lineNumber} metadata fields must not exceed 128 characters`);
+		}
 		if (fields.some((field) => /[\x00-\x1f\x7f]/.test(field))) {
 			throw new Error(`${source}:${lineNumber} contains a control character`);
 		}
@@ -75,7 +80,9 @@ export function resolveInventoryFilter(records, value, { maxTargets = 8 } = {}) 
 	const filter = validateInventoryFilter(value);
 	const targets = [];
 	for (const record of records.values()) {
-		if (Object.entries(filter).every(([field, selected]) => record[field] === selected)) {
+		if (Object.entries(filter).every(
+			([field, selected]) => record[field].toLowerCase() === selected.toLowerCase(),
+		)) {
 			targets.push(record.name);
 		}
 	}
@@ -89,6 +96,51 @@ export function resolveInventoryFilter(records, value, { maxTargets = 8 } = {}) 
 		);
 	}
 	return { filter, targets };
+}
+
+function validateInventorySearch(value) {
+	const input = assertExactKeys(value, ["terms"], "ops_inventory input");
+	if (!Array.isArray(input.terms)) {
+		throw new Error("ops_inventory input.terms must be an array");
+	}
+	if (input.terms.length < 1 || input.terms.length > 6) {
+		throw new Error("ops_inventory input.terms must contain between 1 and 6 terms");
+	}
+	const seen = new Set();
+	return input.terms.map((term, index) => {
+		if (typeof term !== "string" || !SAFE_SEARCH_TERM.test(term)) {
+			throw new Error(
+				`ops_inventory input.terms[${index}] must be one literal alphanumeric inventory search term`,
+			);
+		}
+		const normalized = term.toLowerCase();
+		if (seen.has(normalized)) {
+			throw new Error(`ops_inventory input.terms contains a duplicate: ${term}`);
+		}
+		seen.add(normalized);
+		return normalized;
+	});
+}
+
+export function searchInventory(records, value, { maxMatches = 20 } = {}) {
+	if (!(records instanceof Map)) throw new Error("Protocol Ops inventory must be a Map");
+	if (!Number.isInteger(maxMatches) || maxMatches < 1) {
+		throw new Error("inventory search match limit must be a positive integer");
+	}
+	const terms = validateInventorySearch(value);
+	const matches = [];
+	for (const record of records.values()) {
+		const searchable = INVENTORY_SEARCH_FIELDS.map((field) => record[field].toLowerCase());
+		if (terms.every((term) => searchable.some((field) => field.includes(term)))) {
+			matches.push({ ...record });
+		}
+	}
+	if (matches.length > maxMatches) {
+		throw new Error(
+			`ops_inventory matched ${matches.length} hosts; narrow the terms to at most ${maxMatches} matches (no rows were returned)`,
+		);
+	}
+	return { terms, matches };
 }
 
 export function materializeTaskInput(params, records, { maxTargets = 8 } = {}) {

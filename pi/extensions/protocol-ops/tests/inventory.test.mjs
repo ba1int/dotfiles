@@ -4,6 +4,7 @@ import {
 	materializeTaskInput,
 	parseInventory,
 	resolveInventoryFilter,
+	searchInventory,
 } from "../lib/inventory.js";
 
 const valid = [
@@ -28,9 +29,13 @@ test("inventory rejects selectors and duplicates", () => {
 		() => parseInventory(`${valid.trimEnd()}\napp01\tDEV\tr\ts\n`, "fixture"),
 		/duplicates host app01/,
 	);
+	assert.throws(
+		() => parseInventory(`name\tenvironment\trole\tsite\napp01\t${"P".repeat(129)}\tr\ts\n`, "fixture"),
+		/metadata fields must not exceed 128 characters/,
+	);
 });
 
-test("inventory filters use exact AND matching and retain file order", () => {
+test("inventory filters use case-insensitive exact AND matching and retain file order", () => {
 	const records = parseInventory([
 		"name\tenvironment\trole\tsite",
 		"app02\tPROD\tmiddleware\tdc2",
@@ -44,7 +49,44 @@ test("inventory filters use exact AND matching and retain file order", () => {
 		["app02", "app01"],
 	);
 	assert.deepEqual(resolveInventoryFilter(records, { site: "dc1", role: "database" }).targets, ["db01"]);
-	assert.throws(() => resolveInventoryFilter(records, { environment: "prod" }), /matched no hosts/);
+	assert.deepEqual(resolveInventoryFilter(records, { environment: "prod" }).targets, ["app02", "app01", "db01"]);
+	assert.throws(() => resolveInventoryFilter(records, { role: "middle" }), /matched no hosts/);
+});
+
+test("inventory discovery matches natural terms across fields without creating authority", () => {
+	const records = parseInventory([
+		"name\tenvironment\trole\tsite",
+		"lab-prod-app01\tPROD\tmiddleware\tdc1",
+		"lab-prod-mq01\tPROD\tmessaging\tdc1",
+		"lab-test-mq01\tTEST\tmessaging\tlab",
+	].join("\n"), "fixture");
+	assert.deepEqual(searchInventory(records, { terms: ["prod", "mq"] }), {
+		terms: ["prod", "mq"],
+		matches: [{ name: "lab-prod-mq01", environment: "PROD", role: "messaging", site: "dc1" }],
+	});
+	assert.deepEqual(
+		searchInventory(records, { terms: ["PROD", "MESSAGING"] }).matches.map((record) => record.name),
+		["lab-prod-mq01"],
+	);
+	assert.deepEqual(searchInventory(records, { terms: ["missing"] }).matches, []);
+});
+
+test("inventory discovery is bounded, literal, deterministic, and never silently truncated", () => {
+	const records = parseInventory(valid, "fixture");
+	assert.throws(() => searchInventory(records, { terms: [] }), /between 1 and 6/);
+	assert.throws(() => searchInventory(records, { terms: ["prod", "PROD"] }), /duplicate/);
+	assert.throws(() => searchInventory(records, { terms: ["prod|"] }), /literal alphanumeric/);
+	assert.throws(() => searchInventory(records, { terms: ["prod"], extra: true }), /unsupported field/);
+	assert.throws(() => searchInventory(records, { terms: ["prod"] }, { maxMatches: 0 }), /positive integer/);
+
+	const many = new Map(Array.from({ length: 21 }, (_, index) => [
+		`prod-${index}`,
+		{ name: `prod-${index}`, environment: "PROD", role: "app", site: "dc1" },
+	]));
+	assert.throws(
+		() => searchInventory(many, { terms: ["prod"] }),
+		/matched 21 hosts.*at most 20.*no rows were returned/,
+	);
 });
 
 test("inventory filters reject ambiguous, unsafe, empty, and over-cap requests", () => {
