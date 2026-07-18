@@ -256,6 +256,10 @@ export function resolveRunbook(runbooks, id) {
 		label: selected.label,
 		description: selected.description,
 		profiles,
+		focus: ordered
+			.filter((runbook) => runbook.selectable)
+			.map((runbook) => `## ${runbook.label}\n\n${runbook.manualText}`)
+			.join("\n\n"),
 		manual: ordered.map((runbook) => `## ${runbook.label}\n\n${runbook.manualText}`).join("\n\n"),
 		manualIds: ordered.map((runbook) => runbook.id),
 		manuals: ordered.map((runbook) => ({ id: runbook.id, sha256: runbook.manualSha256 })),

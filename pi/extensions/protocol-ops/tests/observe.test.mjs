@@ -332,9 +332,42 @@ test("formatted batch output has one deterministic global byte budget", () => {
 		stderr: "",
 		durationMs: 1,
 	}));
-	const receipt = { id: "receipt-1", collected: 4, collectionFailed: 0 };
+	const receipt = {
+		id: "receipt-1",
+		at: "2026-07-18T12:00:00.000Z",
+		collected: 4,
+		collectionFailed: 0,
+	};
 	const formatted = formatObservation(plan, results, receipt, { maxBytes: 2048 });
 	assert.ok(Buffer.byteLength(formatted.text, "utf8") <= 2048);
 	assert.ok(formatted.truncatedOperations.length + formatted.omittedOperations.length > 0);
 	assert.match(formatted.text, /OUTPUT BUDGET|…/);
+	assert.match(formatted.text, /observed_at: 2026-07-18T12:00:00.000Z/);
+	assert.match(formatted.text, /not a health verdict/);
+	assert.match(formatted.text, /EVIDENCE INCOMPLETE/);
+});
+
+test("successful empty collection is explicitly not a health result", () => {
+	const plan = preflightObservation({ targets: ["app01"], checks: ["host"] }, fixture());
+	const results = [{
+		host: "app01",
+		checkId: "host",
+		label: "Host",
+		collected: true,
+		exitCode: 0,
+		failure: null,
+		stdout: "",
+		stderr: "",
+		durationMs: 1,
+	}];
+	const formatted = formatObservation(plan, results, {
+		id: "receipt-empty",
+		at: "2026-07-18T12:00:00.000Z",
+		collected: 1,
+		collectionFailed: 0,
+	});
+	assert.match(formatted.text, /collection_ok/);
+	assert.match(formatted.text, /semantic state not established/);
+	assert.match(formatted.text, /not a health verdict/);
+	assert.doesNotMatch(formatted.text, /healthy|passed/i);
 });

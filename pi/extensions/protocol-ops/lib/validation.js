@@ -1,6 +1,7 @@
 export const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const SAFE_HOST = /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/;
 export const SAFE_TICKET = /^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,127}$/;
+export const MAX_OPERATION_ID_LENGTH = 253 + 1 + 64;
 
 export function isPlainObject(value) {
 	return value !== null && typeof value === "object" && !Array.isArray(value);

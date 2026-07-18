@@ -11,6 +11,7 @@ test("Protocol Ops reads/state are exact-name allows while remote mutation remai
 	const policy = JSON.parse(readFileSync(policyPath, "utf8"));
 	assert.equal(policy.tools.ops_task, "allow");
 	assert.equal(policy.tools.ops_observe, "allow");
+	assert.equal(policy.tools.ops_monitoring, "allow");
 	assert.equal(policy.tools.ops_checkpoint, "allow");
 	assert.equal(policy.tools.ssh_bash, "ask");
 	assert.equal(policy.tools.ssh_write, "deny");

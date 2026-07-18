@@ -31,7 +31,12 @@ test("bundled check and runbook catalogs validate", () => {
 		"icinga",
 		"icinga_config",
 	]);
-	assert.match(icinga.manual, /context, not authorization/i);
+	assert.match(icinga.manual, /never authorizes arbitrary shell or mutation/i);
+	assert.match(icinga.manual, /not that the host, service/i);
+	assert.match(icinga.focus, /ops_monitoring/);
+	assert.match(icinga.focus, /smallest useful observation set/);
+	assert.doesNotMatch(icinga.focus, /human-confirmed scope for audited reads/);
+	assert.ok(icinga.focus.length < icinga.manual.length);
 	for (const profileId of [
 		"baseline",
 		"monitoring",

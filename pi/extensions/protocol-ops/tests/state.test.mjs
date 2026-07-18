@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkpointTask, createTask, restoreTask, TASK_ENTRY_TYPE } from "../lib/state.js";
+import {
+	assertCheckpointTurnAllowed,
+	checkpointTask,
+	createTask,
+	restoreTask,
+	TASK_ENTRY_TYPE,
+} from "../lib/state.js";
 
 const inventory = new Map([["app01", { name: "app01" }]]);
 const runbooks = new Map([["incident", { id: "incident", selectable: true }]]);
@@ -82,6 +88,28 @@ test("checkpoint rejects command-shaped extras and remains non-authorizing", () 
 	assert.deepEqual(later.facts, ["Unit is failed"]);
 });
 
+test("checkpoint cannot outrun task declarations or attempted reads in one model turn", () => {
+	const base = {
+		currentTurnIndex: 7,
+		lastTaskDeclarationTurnIndex: null,
+		lastObservationTurnIndex: null,
+		blockedObservationTurnIndex: null,
+	};
+	assert.doesNotThrow(() => assertCheckpointTurnAllowed(base));
+	assert.throws(
+		() => assertCheckpointTurnAllowed({ ...base, lastTaskDeclarationTurnIndex: 7 }),
+		/task declaration/,
+	);
+	assert.throws(
+		() => assertCheckpointTurnAllowed({ ...base, blockedObservationTurnIndex: 7 }),
+		/task declaration/,
+	);
+	assert.throws(
+		() => assertCheckpointTurnAllowed({ ...base, lastObservationTurnIndex: 7 }),
+		/Protocol Ops read/,
+	);
+});
+
 test("latest append-only task entry restores and tombstone clears it", () => {
 	const task = restorableTask();
 	const branch = [
@@ -109,4 +137,65 @@ test("restored state rejects malformed or widened read scope", () => {
 	);
 	assert.equal(restored, null);
 	assert.match(invalidReason, /read scope does not match/);
+});
+
+test("typed monitoring receipt round-trips through durable task restoration", () => {
+	const task = restorableTask({
+		receipts: [{
+			id: "monitoring-receipt-1",
+			taskId: "task-1",
+			at: "2026-07-18T12:01:00.000Z",
+			targets: ["app01"],
+			checks: ["icinga_checks"],
+			operations: 1,
+			collected: 1,
+			collectionFailed: 0,
+			failedOperations: [],
+			output: {
+				limitBytes: 64 * 1024,
+				truncatedOperations: ["app01/icinga_checks"],
+				omittedOperations: [],
+			},
+		}],
+	});
+	const restored = restoreTask([
+		{ type: "custom", customType: TASK_ENTRY_TYPE, data: task },
+	]);
+	assert.equal(restored.receipts[0].checks[0], "icinga_checks");
+	assert.deepEqual(restored.receipts[0].output.truncatedOperations, ["app01/icinga_checks"]);
+});
+
+test("receipt operation IDs support the full valid host-alias length", () => {
+	const host = "a".repeat(253);
+	const operation = `${host}/icinga_checks`;
+	const task = restorableTask({
+		targets: [host],
+		readScope: {
+			method: "human-confirmation",
+			approvedAt: "2026-07-18T12:00:00.000Z",
+			expiresAt: "2026-07-19T00:00:00.000Z",
+			targets: [host],
+		},
+		receipts: [{
+			id: "long-host-receipt",
+			taskId: "task-1",
+			at: "2026-07-18T12:01:00.000Z",
+			targets: [host],
+			checks: ["icinga_checks"],
+			operations: 1,
+			collected: 0,
+			collectionFailed: 1,
+			failedOperations: [operation],
+			output: {
+				limitBytes: 64 * 1024,
+				truncatedOperations: [operation],
+				omittedOperations: [operation],
+			},
+		}],
+	});
+	const restored = restoreTask([
+		{ type: "custom", customType: TASK_ENTRY_TYPE, data: task },
+	]);
+	assert.equal(restored.receipts[0].failedOperations[0], operation);
+	assert.equal(restored.receipts[0].output.truncatedOperations[0], operation);
 });

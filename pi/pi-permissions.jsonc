@@ -20,6 +20,7 @@
     "ssh_bash": "ask",
     "ops_task": "allow",
     "ops_observe": "allow",
+    "ops_monitoring": "allow",
     "ops_checkpoint": "allow"
   },
   "bash": {

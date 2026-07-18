@@ -6,6 +6,7 @@ import {
 	assertSafeTicket,
 	assertStringList,
 	assertUniqueStrings,
+	MAX_OPERATION_ID_LENGTH,
 	SAFE_HOST,
 } from "./validation.js";
 
@@ -22,6 +23,24 @@ export const TASK_PHASES = [
 	"done",
 	"blocked",
 ];
+
+export function assertCheckpointTurnAllowed({
+	currentTurnIndex,
+	lastTaskDeclarationTurnIndex,
+	lastObservationTurnIndex,
+	blockedObservationTurnIndex,
+}) {
+	if (lastTaskDeclarationTurnIndex === currentTurnIndex || blockedObservationTurnIndex === currentTurnIndex) {
+		throw new Error(
+			"ops_checkpoint was generated in the same model turn as a task declaration; inspect the task result and checkpoint on the next model turn",
+		);
+	}
+	if (lastObservationTurnIndex === currentTurnIndex) {
+		throw new Error(
+			"ops_checkpoint was generated in the same model turn as a Protocol Ops read; inspect the result and checkpoint on the next model turn",
+		);
+	}
+}
 
 function assertTimestamp(value, label) {
 	const text = assertBoundedString(value, label, 40);
@@ -125,7 +144,7 @@ function validateReceipt(value, index, taskId) {
 	}
 	const failedOperations = assertStringList(record.failedOperations, `${label}.failedOperations`, {
 		maxItems: 32,
-		maxLength: 140,
+		maxLength: MAX_OPERATION_ID_LENGTH,
 	});
 	if (failedOperations.length !== record.collectionFailed) {
 		throw new Error(`${label}.failedOperations does not match failed count`);
@@ -145,12 +164,12 @@ function validateReceipt(value, index, taskId) {
 			truncatedOperations: assertStringList(
 				outputRecord.truncatedOperations,
 				`${label}.output.truncatedOperations`,
-				{ maxItems: 32, maxLength: 140 },
+				{ maxItems: 32, maxLength: MAX_OPERATION_ID_LENGTH },
 			),
 			omittedOperations: assertStringList(
 				outputRecord.omittedOperations,
 				`${label}.output.omittedOperations`,
-				{ maxItems: 32, maxLength: 140 },
+				{ maxItems: 32, maxLength: MAX_OPERATION_ID_LENGTH },
 			),
 		};
 	}

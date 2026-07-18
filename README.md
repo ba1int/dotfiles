@@ -86,12 +86,14 @@ sessions, package storage, and model selection remain machine-local:
 | Remote `ssh_bash` | ask |
 | Protocol Ops task/checkpoint state | allow |
 | Protocol Ops audited observation batches | allow |
+| Protocol Ops typed Icinga object/check queries | allow |
 | Unknown registered tools, MCP, external paths | ask |
 
 The policy allows the exact Protocol Ops tool names, but `ops_task` has its own
-interactive gate: you approve the literal host list before it creates a
-12-hour audited-read scope. That scope never includes arbitrary shell or any
-mutation.
+interactive gate: you approve every literal host before it creates a 12-hour
+audited-read scope. An inventory filter is expanded before that dialog and
+cannot silently add later hosts. The scope never includes arbitrary shell or
+any mutation.
 
 Start Pi and explicitly enter one remote context:
 
@@ -137,13 +139,19 @@ The Pi installer also links one dependency-free, repository-owned extension.
 It borrows the useful parts of Tura's command batches and runtime manuals while
 keeping remote mutation completely outside the new path:
 
-- `ops_task` declares an exact task type, objective, ticket, and inventory host
-  set. An extension-owned dialog asks you to approve that literal host list for
-  named reads for 12 hours, then loads only the matching versioned runbook.
+- `ops_task` declares an exact task type, objective, ticket, and either literal
+  inventory hosts or one exact `environment`/`role`/`site` filter. Filters use
+  AND matching, resolve in inventory order, and must produce at most eight
+  hosts. The dialog shows and binds only the expanded literal list for 12 hours;
+  the filter is never persisted as authority.
 - `ops_observe` expands audited profile/check IDs, validates the complete batch,
   and then runs independent SSH reads in parallel across at most four hosts;
   checks remain sequential on each host. It accepts no command text and does
   not require `/ssh HOST` first.
+- `ops_monitoring` queries the configured Icinga API for the exact host object,
+  service checks, state/attempt metadata, and bounded last-result output for
+  declared targets. The model cannot supply an endpoint, credentials, HTTP
+  method, filter expression, attribute list, or request body.
 - `ops_checkpoint` stores the compact phase, confirmed facts, blockers, recent
   observation receipts, and next steps in Pi's append-only session tree. The
   state survives compaction, resume, and tree navigation.
@@ -159,6 +167,11 @@ Pi can declare an `icinga-onboard` task, run the inherited `baseline` and
 checkpoint the plan without a manual `/ssh` mode switch. `/ops status`,
 `/ops catalog`, and `/ops reset` expose the small human control surface.
 
+Fleet phrasing can stay natural. For example, “inspect disk on all PROD
+middleware hosts” may produce an exact `environment=PROD, role=middleware`
+filter. If it matches nine or more hosts, task declaration fails rather than
+silently truncating or widening scope; narrow the site/role or split the work.
+
 The auto-allowed boundary is the outer tool, so the extension performs its own
 all-or-nothing preflight before starting SSH. Every target must be both in the
 inventory and in the confirmed, unexpired task scope; `done` and `blocked`
@@ -170,14 +183,25 @@ socket, and recursive configuration observations are explicit incident
 follow-ups (onboarding runbooks include the relevant configuration profile);
 sensitive log checks trigger a second exact-host/check confirmation.
 
+Icinga API reads share that same confirmed target scope. Requests use HTTPS,
+TLS 1.2 or newer, no redirects, a fixed read-only object-query shape, exact
+targets in `filter_vars`, a 10-second default deadline, and a 512 KiB raw
+response limit. Returned host names are revalidated against the confirmed
+scope before any API data is rendered. At most 128 services per host and 64 KiB
+per rendered batch enter model context. `PULSE_ICINGA_INSECURE=1` is visibly
+reported as `tls_verified: false` and is appropriate only for the disposable
+self-signed lab.
+
 Reads run through `ssh` with agent/X11 forwarding, all configured forwards,
 local commands, and host-key updates disabled. Strict host-key checking is on,
 so establish a new host key deliberately with normal `ssh` before using the
 batch tool. Each check is capped at 8 KiB, the rendered batch at 128 KiB, and a
 stuck client escalates from TERM to KILL with a hard settlement deadline.
-Results retain request order and are recorded under a receipt ID. “Collected”
-means the diagnostic command returned one of its documented exit codes; it
-does not mean that a process, unit, or host is healthy.
+Results retain request order and are recorded under a receipt ID.
+`collection_ok` means only that the named SSH command or API retrieval completed
+as documented; it does not mean that a process, unit, monitoring object,
+application, configuration, or host is healthy. Empty, omitted, or truncated
+output cannot prove absence or recovery.
 
 Remote output is untrusted. It becomes Pi tool-result/session content and is
 sent to the selected model provider; only bounded receipt metadata is copied
@@ -470,6 +494,23 @@ as `source<TAB>severity<TAB>host<TAB>service<TAB>output<TAB>epoch`; exit `10`
 means unconfigured and any other nonzero status marks the index incomplete.
 TLS verification stays enabled unless `icinga_insecure=1` is explicitly set,
 which is used only by the self-signed mock lab.
+
+`ops_monitoring` reads the same Icinga settings and path precedence:
+`PULSE_CONFIG`, then `${OPS_CONFIG_HOME}/pulse.conf`, then the default shown
+above. When the extension initializes, it captures and removes an inherited
+`PULSE_ICINGA_PASSWORD` before any Protocol Ops tool can start a subprocess.
+Keep the private `pulse.conf` as the durable source because an environment-only
+password survives only for the current extension lifetime. After changing that
+file, use `/reload` or restart Pi. Production should use a dedicated API user
+limited to read-only object queries rather than the lab's intentionally broad
+disposable credential. The
+minimum permissions for this tool are `objects/query/Host`,
+`objects/query/Service`, and—when the master enforces it—`filter-expression`.
+Icinga introduced the last permission in 2.16.2 and plans to enforce it by
+default from 2.17. Its own documentation warns that advanced filter evaluation
+can be abused for denial of service, so keep this credential private, use only
+the tool's fixed equality query, and keep the master patched; see the
+[Icinga API permission and filter notes](https://icinga.com/docs/icinga-2/latest/doc/12-icinga2-api/).
 
 The lab's isolated Ubuntu workstation installs this same configuration with
 `./install-terminal.sh --no-ghostty --with-shell --no-lab`. That internal mode

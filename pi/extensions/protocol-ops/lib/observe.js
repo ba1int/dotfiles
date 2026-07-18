@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import {
 	assertExactKeys,
 	assertUniqueStrings,
-	SAFE_HOST,
 	SAFE_ID,
 } from "./validation.js";
+import { assertActiveReadScope, selectScopedTargets } from "./scope.js";
 
 export const OBSERVE_LIMITS = {
 	maxTargets: 4,
@@ -14,22 +14,6 @@ export const OBSERVE_LIMITS = {
 	maxOutputBytes: 8 * 1024,
 	maxBatchOutputBytes: 128 * 1024,
 };
-
-const TERMINAL_TASK_PHASES = new Set(["done", "blocked"]);
-
-function selectTargets(value, task, inventory, limits) {
-	const targets = assertUniqueStrings(value, "ops_observe input.targets", {
-		min: 1,
-		max: limits.maxTargets,
-		pattern: SAFE_HOST,
-	});
-	const declared = new Set(task.targets);
-	for (const host of targets) {
-		if (!inventory.has(host)) throw new Error(`ops_observe target is outside the inventory: ${host}`);
-		if (!declared.has(host)) throw new Error(`ops_observe target is outside the active task: ${host}`);
-	}
-	return targets;
-}
 
 function expandChecks(profileIds, checkIds, taskRunbook, catalog, limits) {
 	const useRunbookDefaults = profileIds === undefined && checkIds === undefined;
@@ -70,23 +54,14 @@ export function preflightObservation(
 	params,
 	{ task, taskRunbook, inventory, catalog, limits = OBSERVE_LIMITS, nowMs = () => Date.now() },
 ) {
-	if (!task?.active) throw new Error("no active Protocol Ops task; call ops_task first");
-	if (TERMINAL_TASK_PHASES.has(task.phase)) {
-		throw new Error(`Protocol Ops task is ${task.phase}; declare ops_task again to open a new read scope`);
-	}
-	if (
-		task.readScope?.method !== "human-confirmation" ||
-		!Array.isArray(task.readScope.targets) ||
-		JSON.stringify(task.readScope.targets) !== JSON.stringify(task.targets)
-	) {
-		throw new Error("active task has no valid exact-host read scope; declare ops_task again");
-	}
-	const expiresAt = Date.parse(task.readScope.expiresAt);
-	if (!Number.isFinite(expiresAt) || nowMs() >= expiresAt) {
-		throw new Error("active task read scope expired; declare ops_task again to reconfirm it");
-	}
+	assertActiveReadScope(task, { nowMs });
 	const input = assertExactKeys(params, ["targets", "profiles", "checks"], "ops_observe input");
-	const targets = selectTargets(input.targets, task, inventory, limits);
+	const targets = selectScopedTargets(input.targets, {
+		task,
+		inventory,
+		maxTargets: limits.maxTargets,
+		label: "ops_observe input",
+	});
 	const checks = expandChecks(input.profiles, input.checks, taskRunbook, catalog, limits);
 	const operationCount = targets.length * checks.length;
 	if (operationCount > limits.maxOperations) {
@@ -306,12 +281,12 @@ function truncateUtf8(value, maxBytes) {
 
 function formatResultSection(result) {
 	const status = result.collected
-		? `collected exit=${result.exitCode}`
-		: `collection_failed=${result.failure ?? "exit"} exit=${result.exitCode ?? "-"}`;
+		? `collection_ok exit=${result.exitCode}`
+		: `collection_failed reason=${result.failure ?? "exit"} exit=${result.exitCode ?? "-"}`;
 	const lines = [`--- ${result.host}/${result.checkId} [${status}; ${result.durationMs}ms] ---`];
 	if (result.stdout) lines.push(result.stdout);
 	if (result.stderr) lines.push(`stderr: ${result.stderr}`);
-	if (!result.stdout && !result.stderr) lines.push("(no output)");
+	if (!result.stdout && !result.stderr) lines.push("(no output returned; semantic state not established)");
 	return lines.join("\n");
 }
 
@@ -323,9 +298,11 @@ export function formatObservation(
 ) {
 	const lines = [
 		`OBSERVATION RECEIPT ${receipt.id}`,
+		`observed_at: ${receipt.at}`,
 		`targets: ${plan.targets.join(", ")}`,
 		`checks: ${plan.checks.map((check) => check.id).join(", ")}`,
-		`collection: ${receipt.collected} completed / ${receipt.collectionFailed} failed`,
+		`collection: ${receipt.collected} ok / ${receipt.collectionFailed} failed`,
+		"meaning: collection status reports command execution only; it is not a health verdict.",
 	];
 	const truncatedOperations = [];
 	const omittedOperations = [];
@@ -358,6 +335,7 @@ export function formatObservation(
 			`OUTPUT BUDGET ${maxBytes} bytes`,
 			`truncated operations: ${truncatedOperations.join(", ") || "none"}`,
 			`omitted operations: ${omittedOperations.join(", ") || "none"}`,
+			"EVIDENCE INCOMPLETE: do not infer health, recovery, or absence from truncated or omitted operations.",
 		);
 	}
 	const text = truncateUtf8(lines.join("\n"), maxBytes);
