@@ -167,6 +167,7 @@ link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protoc
 
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
+link_path "$repo_root/nvim/protocol-clipboard.vim" "$nvim_dir/protocol-clipboard.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
 link_path "$repo_root/lib/protocol-ops" "$data_home/protocol-ops"
 link_path "$repo_root/bin/hop" "$HOME/.local/bin/hop"

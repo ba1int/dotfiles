@@ -339,6 +339,10 @@ without copying credentials or committing machine state.
   groups, diagnostic semantics, and the shared ANSI colors.
 - `nvim/init.vim` adds the ledger statusline, square FZF record window, and
   clean Neovim-specific interaction layer.
+- `nvim/protocol-clipboard.vim` keeps native clipboard providers on desktop and
+  WSL machines, then falls back to Neovim's built-in OSC 52 provider for
+  SSH/Zellij sessions that have no clipboard tool. Normal yanks reach the local
+  terminal clipboard without installing X11 utilities remotely.
 - `vim/vimrc` preserves the existing shared keybindings and keeps Everforest
   as a Vim-only fallback; Neovim explicitly opts into Protocol Ink.
 
