@@ -37,10 +37,6 @@ test("bundled check and runbook catalogs validate", () => {
 	assert.match(icinga.focus, /smallest useful observation set/);
 	assert.doesNotMatch(icinga.focus, /human-confirmed scope for audited reads/);
 	assert.ok(icinga.focus.length < icinga.manual.length);
-	const account = resolveRunbook(runbooks, "account-provision");
-	assert.deepEqual(account.manualIds, ["base", "account-provision"]);
-	assert.match(account.focus, /ops_account/);
-	assert.match(account.focus, /no supplementary groups and no sudo grant/i);
 	for (const profileId of [
 		"baseline",
 		"monitoring",

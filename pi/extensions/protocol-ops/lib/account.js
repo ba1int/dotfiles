@@ -9,8 +9,12 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { assertExactKeys } from "./validation.js";
-import { assertActiveReadScope, selectScopedTargets } from "./scope.js";
+import {
+	assertExactKeys,
+	assertSafeTicket,
+	assertUniqueStrings,
+	SAFE_HOST,
+} from "./validation.js";
 
 export const ACCOUNT_LIMITS = {
 	maxTargets: 4,
@@ -21,8 +25,10 @@ export const ACCOUNT_LIMITS = {
 const SAFE_USERNAME = /^[a-z_][a-z0-9_-]{0,31}$/;
 const ALLOWED_SHELLS = new Set(["/bin/bash", "/bin/sh"]);
 const REQUIRED_REMOTE_PATHS = [
+	"/usr/bin/awk",
 	"/usr/bin/getent",
 	"/usr/bin/id",
+	"/usr/bin/stat",
 	"/usr/bin/sudo",
 	"/usr/sbin/chpasswd",
 	"/usr/sbin/useradd",
@@ -161,25 +167,24 @@ function validateUsername(value) {
 
 export function createAccountPlan(
 	params,
-	{ task, inventory, now = () => new Date(), makeId = randomUUID } = {},
+	{ inventory, now = () => new Date(), makeId = randomUUID } = {},
 ) {
-	assertActiveReadScope(task);
-	if (task.taskType !== "account-provision") {
-		throw new Error("ops_account requires an active account-provision task");
-	}
-	if (!task.ticket) throw new Error("ops_account requires a ticket/reference on the active task");
 	const input = assertExactKeys(
 		params,
-		["targets", "username", "shell", "create_home", "force_password_change"],
+		["targets", "username", "shell", "create_home", "force_password_change", "reference"],
 		"ops_account input",
 	);
-	const targets = selectScopedTargets(input.targets, {
-		task,
-		inventory,
-		maxTargets: ACCOUNT_LIMITS.maxTargets,
-		label: "ops_account input",
+	if (!(inventory instanceof Map)) throw new Error("Protocol Ops inventory must be a Map");
+	const targets = assertUniqueStrings(input.targets, "ops_account input.targets", {
+		min: 1,
+		max: ACCOUNT_LIMITS.maxTargets,
+		pattern: SAFE_HOST,
 	});
+	for (const host of targets) {
+		if (!inventory.has(host)) throw new Error(`ops_account input target is outside the inventory: ${host}`);
+	}
 	const username = validateUsername(input.username);
+	const externalReference = assertSafeTicket(input.reference, "ops_account input.reference", { optional: true });
 	if (!ALLOWED_SHELLS.has(input.shell)) {
 		throw new Error("ops_account input.shell must be /bin/bash or /bin/sh");
 	}
@@ -189,12 +194,11 @@ export function createAccountPlan(
 	}
 	const id = makeId();
 	return {
-		schema_version: "protocol-ops-account-plan/1",
+		schema_version: "protocol-ops-account-plan/2",
 		plan_id: id,
 		created_at: now().toISOString(),
-		task_id: task.taskId,
-		ticket: task.ticket,
-		approved_targets: [...targets],
+		external_reference: externalReference ?? null,
+		targets: [...targets],
 		action: {
 			op: "create_normal_account",
 			username,
@@ -204,20 +208,67 @@ export function createAccountPlan(
 			force_password_change: true,
 			credential_ref: `secret://protocol-ops/${id}`,
 		},
-		prechecks: ["account_absent", "passwordless_root", "required_tools"],
-		postchecks: ["account_identity", "password_change_required"],
+		prechecks: ["account_absent", "noninteractive_root_probe", "required_tools"],
+		postchecks: ["account_identity", "home_ownership", "no_supplementary_groups", "password_set", "password_change_required"],
 		rollback: "delete_only_account_created_by_this_plan",
 		executor: "fixed-argv-ssh-v1",
 	};
 }
 
-function preflightScript(username) {
+const DEFAULT_NON_PRODUCTION_ENVIRONMENTS = new Set([
+	"LAB",
+	"TEST",
+]);
+
+function nonProductionEnvironments(value) {
+	if (value === undefined || value.trim() === "") return DEFAULT_NON_PRODUCTION_ENVIRONMENTS;
+	const selected = value
+		.split(",")
+		.map((item) => item.trim().toUpperCase())
+		.filter(Boolean);
+	if (selected.length === 0 || selected.some((item) => !/^[A-Z0-9._-]{1,64}$/.test(item))) {
+		throw new Error("PROTOCOL_OPS_NON_PRODUCTION_ENVIRONMENTS is invalid");
+	}
+	return new Set(selected);
+}
+
+export function accountConfirmationDecision(plan, inventory, env = process.env) {
+	const mode = (env.PROTOCOL_OPS_ACCOUNT_CONFIRM || "risk").trim().toLowerCase();
+	if (!new Set(["always", "operator", "risk"]).has(mode)) {
+		throw new Error("PROTOCOL_OPS_ACCOUNT_CONFIRM must be always, risk, or operator");
+	}
+	if (mode === "always") return { mode, required: true, reason: "operator policy requires confirmation" };
+	if (mode === "operator") {
+		return { mode, required: false, reason: "explicit operator mode trusts typed account actions" };
+	}
+	if (!(inventory instanceof Map)) throw new Error("Protocol Ops inventory must be a Map");
+	if (plan.targets.length > 1) {
+		return { mode, required: true, reason: "multi-host account change" };
+	}
+	const nonProduction = nonProductionEnvironments(env.PROTOCOL_OPS_NON_PRODUCTION_ENVIRONMENTS);
+	const elevatedTargets = plan.targets.filter((host) => {
+		const record = inventory.get(host);
+		return !record || !nonProduction.has(record.environment.toUpperCase());
+	});
+	if (elevatedTargets.length > 0) {
+		return {
+			mode,
+			required: true,
+			reason: `environment requires confirmation: ${elevatedTargets.join(", ")}`,
+		};
+	}
+	return { mode, required: false, reason: "single non-production target" };
+}
+
+function preflightScript(username, shell) {
 	return [
 		"set -eu",
 		"export LC_ALL=C",
 		`username='${username}'`,
+		`login_shell='${shell}'`,
 		"if /usr/bin/getent passwd \"$username\" >/dev/null 2>&1; then printf 'account_present\\n'; exit 20; fi",
 		...REQUIRED_REMOTE_PATHS.map((path) => `[ -x '${path}' ] || { printf 'missing_tool:${path}\\n'; exit 21; }`),
+		"[ -x \"$login_shell\" ] || { printf 'missing_login_shell:%s\\n' \"$login_shell\"; exit 21; }",
 		"uid=$(/usr/bin/sudo -n /usr/bin/id -u 2>/dev/null) || { printf 'passwordless_root_unavailable\\n'; exit 22; }",
 		"[ \"$uid\" = 0 ] || { printf 'sudo_not_root\\n'; exit 23; }",
 		"printf 'ready\\n'",
@@ -226,14 +277,14 @@ function preflightScript(username) {
 
 export async function collectAccountPreflight(plan, { runner = runAccountSsh, signal } = {}) {
 	const results = [];
-	for (const host of plan.approved_targets) {
+	for (const host of plan.targets) {
 		if (signal?.aborted) {
 			const error = new Error("account preflight aborted");
 			error.name = "AbortError";
 			throw error;
 		}
-		const result = await runner(host, ["sh", "-s"], {
-			stdin: `${preflightScript(plan.action.username)}\n`,
+		const result = await runner(host, ["/bin/sh", "-s"], {
+			stdin: `${preflightScript(plan.action.username, plan.action.shell)}\n`,
 			signal,
 		});
 		results.push({ ...result, stage: "preflight" });
@@ -242,12 +293,12 @@ export async function collectAccountPreflight(plan, { runner = runAccountSsh, si
 }
 
 export function assertAccountPreflight(plan, results) {
-	if (!Array.isArray(results) || results.length !== plan.approved_targets.length) {
+	if (!Array.isArray(results) || results.length !== plan.targets.length) {
 		throw new Error("account preflight result count does not match the plan");
 	}
 	for (let index = 0; index < results.length; index += 1) {
 		const result = results[index];
-		if (result.host !== plan.approved_targets[index]) {
+		if (result.host !== plan.targets[index]) {
 			throw new Error("account preflight target order changed");
 		}
 		if (!result.ok || result.stdout !== "ready") {
@@ -261,16 +312,11 @@ export function assertAccountPreflight(plan, results) {
 export function accountPreflightDigest(plan, results) {
 	const snapshot = {
 		plan_id: plan.plan_id,
-		task_id: plan.task_id,
-		targets: plan.approved_targets,
+		targets: plan.targets,
 		action: plan.action,
 		preflight: results.map((result) => ({ host: result.host, ok: result.ok, stdout: result.stdout })),
 	};
 	return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-}
-
-export function accountPlanDigest(plan) {
-	return createHash("sha256").update(JSON.stringify(plan)).digest("hex");
 }
 
 export function generateTemporaryPassword({ random = randomBytes } = {}) {
@@ -305,13 +351,15 @@ export function persistTemporaryPassword(plan, password, {
 	if ((directoryStat.mode & 0o077) !== 0) {
 		throw new Error("Protocol Ops secret directory must not be group/world accessible");
 	}
-	const filename = [safeFilePart(plan.ticket), safeFilePart(plan.action.username), plan.plan_id.slice(0, 8)].join("-");
+	const reference = plan.external_reference || "adhoc";
+	const filename = [safeFilePart(reference), safeFilePart(plan.action.username), plan.plan_id.slice(0, 8)].join("-");
 	const path = join(directory, `${filename}.txt`);
 	const body = [
-		`ticket=${plan.ticket}`,
+		`operation_id=${plan.plan_id}`,
+		...(plan.external_reference ? [`external_reference=${plan.external_reference}`] : []),
 		`username=${plan.action.username}`,
 		`temporary_password=${password}`,
-		`hosts=${plan.approved_targets.join(",")}`,
+		`hosts=${plan.targets.join(",")}`,
 		"password_change=required_at_first_login",
 		"",
 	].join("\n");
@@ -321,17 +369,68 @@ export function persistTemporaryPassword(plan, password, {
 }
 
 function verificationScript(username, shell) {
+	const home = `/home/${username}`;
 	return [
 		"set -eu",
 		"export LC_ALL=C",
 		`username='${username}'`,
 		`expected_shell='${shell}'`,
+		`expected_home='${home}'`,
 		"entry=$(/usr/bin/getent passwd \"$username\")",
-		"actual_shell=$(printf '%s\\n' \"$entry\" | awk -F: '{print $7}')",
+		"actual_uid=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $3}')",
+		"actual_gid=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $4}')",
+		"actual_home=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $6}')",
+		"actual_shell=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $7}')",
+		"case \"$actual_uid\" in ''|*[!0-9]*|0) printf 'invalid_identity\\n'; exit 31;; esac",
+		"case \"$actual_gid\" in ''|*[!0-9]*|0) printf 'invalid_identity\\n'; exit 31;; esac",
 		"[ \"$actual_shell\" = \"$expected_shell\" ] || { printf 'shell_mismatch\\n'; exit 31; }",
-		"last_change=$(/usr/bin/sudo -n /usr/bin/getent shadow \"$username\" | awk -F: '{print $3}')",
-		"[ \"$last_change\" = 0 ] || { printf 'password_change_not_forced\\n'; exit 32; }",
+		"[ \"$actual_home\" = \"$expected_home\" ] || { printf 'home_mismatch\\n'; exit 32; }",
+		"[ -d \"$actual_home\" ] || { printf 'home_not_directory\\n'; exit 33; }",
+		"[ \"$(/usr/bin/stat -c '%u:%g' \"$actual_home\")\" = \"$actual_uid:$actual_gid\" ] || { printf 'home_owner_mismatch\\n'; exit 33; }",
+		"[ \"$(/usr/bin/id -G \"$username\")\" = \"$actual_gid\" ] || { printf 'supplementary_groups_present\\n'; exit 34; }",
+		"shadow=$(/usr/bin/sudo -n /usr/bin/getent shadow \"$username\")",
+		"password_hash=$(printf '%s\\n' \"$shadow\" | /usr/bin/awk -F: '{print $2}')",
+		"case \"$password_hash\" in ''|\\!*|\\**) printf 'password_locked\\n'; exit 35;; esac",
+		"last_change=$(printf '%s\\n' \"$shadow\" | /usr/bin/awk -F: '{print $3}')",
+		"[ \"$last_change\" = 0 ] || { printf 'password_change_not_forced\\n'; exit 35; }",
 		"printf 'verified:%s\\n' \"$entry\"",
+	].join("\n");
+}
+
+function parseCreatedIdentity(plan, result) {
+	if (!result.ok) throw new Error(result.stderr || result.failure || `exit ${result.exitCode}`);
+	const fields = result.stdout.split(":");
+	if (fields.length !== 7) throw new Error("created account identity is malformed");
+	const [username, , uid, gid, , home, shell] = fields;
+	if (
+		username !== plan.action.username ||
+		!/^\d+$/.test(uid) || Number(uid) <= 0 ||
+		!/^\d+$/.test(gid) || Number(gid) <= 0 ||
+		home !== `/home/${plan.action.username}` ||
+		shell !== plan.action.shell
+	) {
+		throw new Error("created account identity does not match the fixed plan");
+	}
+	return { host: result.host, username, uid, gid, home, shell };
+}
+
+function rollbackScript(identity) {
+	return [
+		"set -eu",
+		"export LC_ALL=C",
+		`username='${identity.username}'`,
+		`expected_uid='${identity.uid}'`,
+		`expected_gid='${identity.gid}'`,
+		`expected_home='${identity.home}'`,
+		`expected_shell='${identity.shell}'`,
+		"entry=$(/usr/bin/getent passwd \"$username\") || { printf 'rollback_account_missing\\n'; exit 41; }",
+		"actual_uid=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $3}')",
+		"actual_gid=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $4}')",
+		"actual_home=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $6}')",
+		"actual_shell=$(printf '%s\\n' \"$entry\" | /usr/bin/awk -F: '{print $7}')",
+		"[ \"$actual_uid:$actual_gid:$actual_home:$actual_shell\" = \"$expected_uid:$expected_gid:$expected_home:$expected_shell\" ] || { printf 'rollback_identity_changed\\n'; exit 42; }",
+		"/usr/bin/sudo -n /usr/sbin/userdel --remove \"$username\"",
+		"printf 'rolled_back\\n'",
 	].join("\n");
 }
 
@@ -352,15 +451,15 @@ async function runApplyStep(runner, host, stage, remoteArgv, options) {
 	}
 }
 
-async function rollbackCreated(plan, createdHosts, { runner, signal } = {}) {
+async function rollbackCreated(createdIdentities, { runner, signal } = {}) {
 	const results = [];
-	for (const host of [...createdHosts].reverse()) {
+	for (const identity of [...createdIdentities].reverse()) {
 		const result = await runApplyStep(
 			runner,
-			host,
+			identity.host,
 			"rollback",
-			["/usr/bin/sudo", "-n", "/usr/sbin/userdel", "--remove", plan.action.username],
-			{ signal },
+			["/bin/sh", "-s"],
+			{ signal, stdin: `${rollbackScript(identity)}\n` },
 		);
 		results.push(result);
 	}
@@ -372,17 +471,18 @@ export async function executeAccountPlan(plan, password, {
 	signal,
 } = {}) {
 	const results = [];
-	const createdHosts = [];
+	const createdIdentities = [];
 	const uncertainHosts = [];
 	let failure = null;
-	for (const host of plan.approved_targets) {
+	for (const host of plan.targets) {
 		const useradd = await runApplyStep(
 			runner,
 			host,
 			"useradd",
 			[
 				"/usr/bin/sudo", "-n", "/usr/sbin/useradd",
-				"--create-home", "--shell", plan.action.shell, plan.action.username,
+				"--create-home", "--home-dir", `/home/${plan.action.username}`,
+				"--shell", plan.action.shell, plan.action.username,
 			],
 			{ signal, secrets: [password] },
 		);
@@ -392,7 +492,26 @@ export async function executeAccountPlan(plan, password, {
 			failure = useradd;
 			break;
 		}
-		createdHosts.push(host);
+		const identityResult = await runApplyStep(
+			runner,
+			host,
+			"identity",
+			["/usr/bin/getent", "passwd", plan.action.username],
+			{ signal, secrets: [password] },
+		);
+		results.push(identityResult);
+		try {
+			createdIdentities.push(parseCreatedIdentity(plan, identityResult));
+		} catch (error) {
+			uncertainHosts.push(host);
+			failure = {
+				...identityResult,
+				ok: false,
+				failure: "identity_unverified",
+				stderr: error instanceof Error ? error.message : "created account identity is unverified",
+			};
+			break;
+		}
 
 		const passwordSet = await runApplyStep(
 			runner,
@@ -424,45 +543,101 @@ export async function executeAccountPlan(plan, password, {
 	if (failure) {
 		// Cleanup uses its own bounded SSH calls even when the foreground signal
 		// was aborted; otherwise Ctrl-C could strand a known-created account.
-		const rollback = await rollbackCreated(plan, createdHosts, { runner });
+		const rollback = await rollbackCreated(createdIdentities, { runner });
 		return {
 			ok: false,
 			failure: { host: failure.host, stage: failure.stage, exitCode: failure.exitCode, failure: failure.failure },
 			results,
 			rollback,
+			knownCreatedHosts: createdIdentities.map((identity) => identity.host),
 			uncertainHosts,
 			rollbackComplete:
 				uncertainHosts.length === 0 &&
-				rollback.length === createdHosts.length &&
+				rollback.length === createdIdentities.length &&
 				rollback.every((result) => result.ok),
 		};
 	}
 
 	const verification = [];
-	for (const host of plan.approved_targets) {
+	for (const host of plan.targets) {
 		const result = await runApplyStep(
 			runner,
 			host,
 			"verify",
-			["sh", "-s"],
+			["/bin/sh", "-s"],
 			{ stdin: `${verificationScript(plan.action.username, plan.action.shell)}\n`, signal, secrets: [password] },
 		);
 		verification.push(result);
 	}
 	const verified = verification.every((result) => result.ok && result.stdout.startsWith("verified:"));
 	if (!verified) {
-		const rollback = await rollbackCreated(plan, createdHosts, { runner });
+		const verificationFailure = verification.find(
+			(result) => !result.ok || !result.stdout.startsWith("verified:"),
+		);
+		const rollback = await rollbackCreated(createdIdentities, { runner });
 		return {
 			ok: false,
-			failure: { host: verification.find((result) => !result.ok)?.host ?? "verification", stage: "verify" },
+			failure: {
+				host: verificationFailure?.host ?? "verification",
+				stage: "verify",
+				exitCode: verificationFailure?.exitCode ?? null,
+				failure: verificationFailure?.failure ?? (verificationFailure?.ok ? "verification_output" : null),
+			},
 			results,
 			verification,
 			rollback,
+			knownCreatedHosts: createdIdentities.map((identity) => identity.host),
 			uncertainHosts: [],
-			rollbackComplete: rollback.length === createdHosts.length && rollback.every((result) => result.ok),
+			rollbackComplete: rollback.length === createdIdentities.length && rollback.every((result) => result.ok),
 		};
 	}
-	return { ok: true, results, verification, rollback: [], uncertainHosts: [], rollbackComplete: false };
+	return {
+		ok: true,
+		results,
+		verification,
+		rollback: [],
+		knownCreatedHosts: createdIdentities.map((identity) => identity.host),
+		uncertainHosts: [],
+		rollbackComplete: false,
+	};
+}
+
+function receiptStep(result) {
+	return {
+		host: result.host,
+		stage: result.stage,
+		ok: result.ok === true,
+		exitCode: Number.isInteger(result.exitCode) ? result.exitCode : null,
+		failure: result.failure ?? null,
+	};
+}
+
+export function summarizeAccountOutcome(outcome) {
+	const executionSteps = [
+		...(Array.isArray(outcome.results) ? outcome.results : []),
+		...(Array.isArray(outcome.verification) ? outcome.verification : []),
+	].map(receiptStep);
+	const rollbackSteps = (Array.isArray(outcome.rollback) ? outcome.rollback : []).map(receiptStep);
+	return {
+		completed: outcome.ok === true,
+		verified: outcome.ok === true,
+		failure: outcome.ok === true
+			? null
+			: {
+				host: outcome.failure?.host ?? null,
+				stage: outcome.failure?.stage ?? null,
+				exitCode: Number.isInteger(outcome.failure?.exitCode) ? outcome.failure.exitCode : null,
+				failure: outcome.failure?.failure ?? null,
+			},
+		knownCreatedHosts: [...(outcome.knownCreatedHosts ?? [])],
+		executionSteps,
+		rollback: {
+			attempted: rollbackSteps.length > 0,
+			complete: rollbackSteps.length > 0 ? outcome.rollbackComplete === true : null,
+			steps: rollbackSteps,
+		},
+		uncertainHosts: [...(outcome.uncertainHosts ?? [])],
+	};
 }
 
 export function removeSecretFile(path) {

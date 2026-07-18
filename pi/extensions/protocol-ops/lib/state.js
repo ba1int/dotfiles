@@ -350,7 +350,7 @@ export function makeReceipt(
 	};
 }
 
-export function restoreTask(branch, { onInvalid } = {}) {
+export function restoreTask(branch, { onInvalid, allowedTaskTypes } = {}) {
 	let current = null;
 	for (const entry of branch) {
 		if (entry?.type !== "custom" || entry.customType !== TASK_ENTRY_TYPE) continue;
@@ -359,7 +359,16 @@ export function restoreTask(branch, { onInvalid } = {}) {
 			current = null;
 		} else {
 			try {
-				current = validateRestoredTask(candidate);
+				const restored = validateRestoredTask(candidate);
+				if (allowedTaskTypes !== undefined) {
+					if (!(allowedTaskTypes instanceof Set)) {
+						throw new Error("allowed restored task types must be a Set");
+					}
+					if (!allowedTaskTypes.has(restored.taskType)) {
+						throw new Error(`restored task type is no longer available: ${restored.taskType}`);
+					}
+				}
+				current = restored;
 			} catch (error) {
 				current = null;
 				onInvalid?.(error instanceof Error ? error.message : String(error));

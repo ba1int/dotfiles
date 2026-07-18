@@ -130,6 +130,22 @@ test("latest append-only task entry restores and tombstone clears it", () => {
 	assert.equal(restoreTask(branch), null);
 });
 
+test("restored tasks from removed runbooks fail closed instead of breaking the session", () => {
+	const task = { ...restorableTask(), taskType: "account-provision", phase: "done" };
+	let invalidReason;
+	const restored = restoreTask(
+		[{ type: "custom", customType: TASK_ENTRY_TYPE, data: task }],
+		{
+			allowedTaskTypes: new Set(["incident", "icinga-alert"]),
+			onInvalid: (message) => {
+				invalidReason = message;
+			},
+		},
+	);
+	assert.equal(restored, null);
+	assert.match(invalidReason, /no longer available: account-provision/);
+});
+
 test("restored state rejects malformed or widened read scope", () => {
 	let invalidReason;
 	const invalid = restorableTask({

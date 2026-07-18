@@ -88,16 +88,18 @@ sessions, package storage, and model selection remain machine-local:
 | Protocol Ops task/checkpoint state | allow |
 | Protocol Ops audited observation batches | allow |
 | Protocol Ops typed Icinga object/check queries | allow |
-| Protocol Ops normal-account action | allow; exact approval inside tool |
+| Protocol Ops normal-account action | allow; typed risk policy inside tool |
 | Unknown registered tools, MCP, external paths | ask |
 
 The policy allows the exact Protocol Ops tool names, but the extension owns the
 non-bypassable gates. `ops_task` asks you to approve every literal host before
 it creates a 12-hour audited-read scope. An inventory filter is expanded before
 that dialog and cannot silently add later hosts. That scope never includes
-arbitrary shell or mutation. The separately typed `ops_account` action performs
-its own preflight and shows the complete mutation plan in a second dialog; the
-outer policy allow exists only so a generic approval layer cannot replace that
+arbitrary shell or mutation. The separately typed `ops_account` action owns its
+own inventory validation, preflight, fixed recipe, verification, rollback, and
+risk decision. A single LAB/TEST target runs directly by default; production,
+unknown environments, and multi-host changes show one exact dialog. The outer
+policy allow exists only so a generic approval layer cannot replace that
 action-specific gate.
 
 Start Pi and explicitly enter one remote context:
@@ -148,18 +150,19 @@ action rather than a generic remote command surface:
 - `ops_inventory` performs a bounded, case-insensitive local inventory search
   without SSH, API access, confirmation, or task authority. Natural shorthand
   such as `prod` plus `mq` may match hostname fragments even when the canonical
-  role is `messaging`; operational access still requires a later `ops_task`.
+  role is `messaging`; audited reads still require a later `ops_task`, while a
+  normal-account request can pass the literal result directly to `ops_account`.
   Returned rows become model context. More than twenty matches fails closed
   without returning a silently truncated subset, so broad fleet enumeration is
   not the intended path. Multiple matches are explicitly ambiguous and must all
   be reported or refined. Repeated narrow searches can still enumerate the
   inventory: the cap limits context and ambiguity, not confidentiality.
-- `ops_task` declares an exact task type, objective, ticket, and either literal
-  inventory hosts or one exact `environment`/`role`/`site` filter. Filter values
-  are case-insensitive but otherwise exact, use AND matching, resolve in
-  inventory order, and must produce at most eight
-  hosts. The dialog shows and binds only the expanded literal list for 12 hours;
-  the filter is never persisted as authority.
+- `ops_task` declares an exact task type, objective, optional external reference,
+  and either literal inventory hosts or one exact `environment`/`role`/`site`
+  filter. Filter values are case-insensitive but otherwise exact, use AND
+  matching, resolve in inventory order, and must produce at most eight hosts.
+  The dialog shows and binds only the expanded literal list for 12 hours; the
+  filter is never persisted as authority.
 - `ops_observe` expands audited profile/check IDs, validates the complete batch,
   and then runs independent SSH reads in parallel across at most four hosts;
   checks remain sequential on each host. It accepts no command text and does
@@ -168,11 +171,13 @@ action rather than a generic remote command surface:
   service checks, state/attempt metadata, and bounded last-result output for
   declared targets. The model cannot supply an endpoint, credentials, HTTP
   method, filter expression, attribute list, or request body.
-- `ops_account` supports only an active, ticketed `account-provision` task on
-  at most four already-approved inventory hosts. It can create one portable
-  normal user with `/bin/bash` or `/bin/sh`, a home directory, no supplementary
-  groups, and a forced password change. It cannot edit an existing user, grant
-  sudo, accept command text, or perform another kind of mutation.
+- `ops_account` is a direct typed action; it needs neither `ops_task` nor a
+  ticket. It can create one portable normal user on at most four literal
+  inventory hosts with `/bin/bash` or `/bin/sh`, a home directory, no requested
+  supplementary groups, and a forced password change. It cannot edit an
+  existing user, add groups or sudo rules, accept command text, or perform
+  another kind of mutation. Every call receives an internal operation ID; a
+  Jira/change/incident reference is optional metadata when one already exists.
 - `ops_checkpoint` stores the compact phase, confirmed facts, blockers, recent
   observation receipts, and next steps in Pi's append-only session tree. The
   state survives compaction, resume, and tree navigation.
@@ -181,12 +186,17 @@ You use it through normal conversation. For example:
 
 ```text
 Wire lab-dev-app01 into Icinga. First inspect it and prepare the plan.
+
+Create a normal account named alice on lab-test-web01, use Bash, and force a
+password change at first login.
 ```
 
 Pi can declare an `icinga-onboard` task, run the inherited `baseline` and
 `icinga`/`icinga_config` observations against that exact inventory alias, and
-checkpoint the plan without a manual `/ssh` mode switch. `/ops status`,
-`/ops catalog`, and `/ops reset` expose the small human control surface.
+checkpoint the plan without a manual `/ssh` mode switch. The second request
+goes straight to `ops_account`; it does not need a task, ticket, reviewer, or
+checkpoint. `/ops status`, `/ops catalog`, and `/ops reset` expose the small
+human control surface for read-oriented tasks.
 
 Fleet phrasing can stay natural. For example, “inspect disk on all PROD
 middleware hosts” may produce an exact `environment=PROD, role=middleware`
@@ -252,22 +262,56 @@ same model turn as an observation or mutation is rejected so pre-generated
 through those generic SSH mutation tools.
 
 For account provisioning, the executor first proves on every target that the
-account is absent, its fixed tools exist, and the current SSH identity already
-has non-interactive root through `sudo -n`. It does not install sudo, edit
-sudoers, or discover a privilege-escalation route. The exact plan and pinned
-preflight hashes receive a sealed Luna xhigh advisory review, but that reviewer
-has no tools and no authority: malformed, unavailable, approving, or blocking
-review output cannot skip the final human dialog. Immediately before apply the
-tool repeats preflight and rejects drift.
+account is absent, its fixed tools and selected login shell exist, and a
+harmless `sudo -n id -u` probe returns UID 0. It does not install sudo, edit
+sudoers, or discover a privilege-escalation route. Every apply and rollback
+command uses `sudo -n` independently, so command-scoped sudoers may still deny a
+later step; that becomes an explicit failed or incomplete-rollback receipt
+instead of a success claim. The default `risk` policy
+runs one LAB/TEST target after that preflight without a ticket, reviewer,
+checkpoint, or dialog. Production-like or unknown environments and multi-host
+plans show one exact dialog, then repeat the pinned preflight and reject drift.
+This keeps routine work to the primary model plus the one purpose-built tool
+instead of paying for a second model to restate checks the executor can prove.
+
+The policy is portable and explicit:
+
+```sh
+# Default: direct on one LAB/TEST host; confirm production/unknown/multi-host.
+export PROTOCOL_OPS_ACCOUNT_CONFIRM=risk
+
+# Stricter: confirm every account action.
+export PROTOCOL_OPS_ACCOUNT_CONFIRM=always
+
+# Trusted single-operator setup: suppress this tool's dialog at every risk tier.
+export PROTOCOL_OPS_ACCOUNT_CONFIRM=operator
+
+# Deliberately extend which inventory environments are considered non-production.
+export PROTOCOL_OPS_NON_PRODUCTION_ENVIRONMENTS=LAB,TEST,DEV
+```
+
+`operator` is an explicit local policy override, not proof that a caller is the
+primary agent. Pi does not expose a trustworthy parent-versus-child identity to
+the extension, so future delegated workers must be launched with a hard Pi
+`--tools` allowlist that omits `ops_account`, generic shell, write/edit, and SSH
+mutation tools. No delegated-worker router is installed by this repository yet;
+do not simulate that boundary with a prompt or a model-supplied role flag.
 
 Only fixed argument vectors run during apply: `useradd`, password delivery to
-`chpasswd` over stdin, `chage`, exact postchecks, and a bounded rollback. The
-temporary password is generated locally after approval, never enters either
-model's context or an argv, and is written to a current-user-owned `0600` file
+`chpasswd` over stdin, `chage`, exact identity/home/group/password postchecks,
+and a bounded rollback. Before rollback, the executor rechecks the UID, primary
+GID, home, and shell captured immediately after creation; if that identity
+changed, deletion stops for manual inspection. The temporary password is
+generated locally after
+authorization, never enters the model context or an argv, and is written to a
+current-user-owned `0600` file
 under `${XDG_STATE_HOME:-$HOME/.local/state}/protocol-ops/secrets`. A known
 created account is removed if a later step or verification fails. A timeout or
 transport failure during `useradd` is deliberately marked uncertain and is
 never followed by an automatic delete; the receipt becomes a hard manual stop.
+Receipts distinguish completion from an attempted change and retain the failed
+host/stage, known-created hosts, bounded step statuses, and rollback outcome
+without copying passwords or raw remote output.
 
 The disposable monitoring lab installs `operator` with passwordless sudo on its
 bastion and mock targets so this full path can be exercised. That is lab image
@@ -329,7 +373,7 @@ without copying credentials or committing machine state.
   package set; the installer adds it without replacing unrelated packages.
 - `pi/pi-permissions.jsonc` is the portable baseline policy for local and SSH
   tools plus exact-name Protocol Ops tools. Generic remote mutation stays
-  denied; the normal-account tool owns its exact internal approval.
+  denied; the normal-account tool owns its internal risk decision.
 - `pi/extensions/protocol-ops/` owns the inventory-bounded task router, audited
   parallel read batches, inherited runbooks, append-only checkpoints, the
   bounded normal-account executor, and dependency-free regression tests.

@@ -65,15 +65,6 @@
       "selectable": true
     },
     {
-      "id": "account-provision",
-      "label": "Normal account provisioning",
-      "description": "Create and verify one normal non-privileged login account through the reviewed typed mutation path.",
-      "manual": "account-provision.md",
-      "parents": ["base"],
-      "default_profiles": [],
-      "selectable": true
-    },
-    {
       "id": "general",
       "label": "General operations task",
       "description": "Bounded work that does not fit a more specific runbook.",
