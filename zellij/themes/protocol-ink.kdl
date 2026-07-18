@@ -1,7 +1,6 @@
 // Protocol Ink / Zellij component theme
-// Current component spec: selected records receive an explicit structural
-// teal field instead of inheriting the terminal background through the
-// legacy palette conversion.
+// Current component spec: inactive records sit directly on the ink field;
+// selected records receive one explicit structural teal field.
 
 themes {
     protocol-ink {
@@ -22,10 +21,10 @@ themes {
             emphasis_3 232 225 210
         }
         ribbon_unselected {
-            base 23 24 21
-            background 232 225 210
+            base 170 168 159
+            background 23 24 21
             emphasis_0 216 91 80
-            emphasis_1 243 240 231
+            emphasis_1 23 24 21
             emphasis_2 126 158 174
             emphasis_3 169 141 160
         }

@@ -1,8 +1,8 @@
 # Protocol Ink terminal setup
 
-A portable Protocol Paper terminal layer for Ghostty, Zellij, and Neovim. The
-visual system uses TX-02, a deep ink surface, warm paper text, ruled structure,
-structural teal, and coral only for intervention states.
+A portable Protocol Paper terminal layer for Ghostty, Zellij, Neovim, and the
+Pi coding agent. The visual system uses TX-02, a deep ink surface, warm paper
+text, ruled structure, structural teal, and coral only for intervention states.
 
 ## Clone and run
 
@@ -56,6 +56,188 @@ profile uses `wsl.exe`, so it opens the default WSL distribution. Change the
 default distribution with `wsl --set-default <Distribution>` in Windows when
 needed.
 
+### Pi coding agent
+
+Pi is an optional, self-contained module. It requires Node.js 22.19 or newer;
+the installer puts the version recorded in `pi/version.txt` in `~/.local`
+without `sudo`, links the Protocol Ink theme, merges only the owned theme/editor
+keys, and installs a small version-pinned operations package set without
+replacing unrelated Pi packages:
+
+```sh
+./install-pi.sh
+```
+
+Then start `pi`, enter `/login`, choose `ChatGPT Plus/Pro (Codex)`, and use
+`/model` (or `Ctrl-l`) to select one of the models exposed by that account. The
+model can match Codex, but Pi remains a different agent harness with different
+tools and instructions.
+
+The operations set combines `@ogulcancelik/pi-ssh-tools` with
+`pi-permission-system`. The repository owns the policy while authentication,
+sessions, package storage, and model selection remain machine-local:
+
+| Operation | Global baseline |
+|---|---|
+| Local read, grep, find, ls | allow |
+| Local write, edit, Bash | ask |
+| Remote `ssh_read` | allow |
+| Remote `ssh_write`, `ssh_edit` | deny |
+| Remote `ssh_bash` | ask |
+| Protocol Ops task/checkpoint state | allow |
+| Protocol Ops audited observation batches | allow |
+| Unknown registered tools, MCP, external paths | ask |
+
+The policy allows the exact Protocol Ops tool names, but `ops_task` has its own
+interactive gate: you approve the literal host list before it creates a
+12-hour audited-read scope. That scope never includes arbitrary shell or any
+mutation.
+
+Start Pi and explicitly enter one remote context:
+
+```text
+/ssh hermes
+/ssh status
+```
+
+The active host and remote working directory remain visible in Pi's status
+area. `/ssh off` returns to local mode. A bare `/ssh` opens a picker for literal
+`Host` entries in `~/.ssh/config`; the upstream package does not expand
+`Include` files, so included aliases should be entered directly, for example
+`/ssh lab-prod-app01`.
+
+This is a testable approval layer, not a remote sandbox. Open
+`/permission-system` before the trial and leave YOLO mode off. Always choose
+**Allow Once** for `ssh_bash`: the upstream **Allow Always** choice covers every
+later `ssh_bash` call in that Pi session, and its approval dialog shows the
+command but not the active host. `ssh_read` can read anything the SSH account
+can read and its output can be sent to the selected model provider. The
+permission extension also treats an absolute remote path as an external local
+path, so an absolute `ssh_read` can produce one extra approval while a relative
+remote path does not.
+
+The `ask` entries are defaults, not a non-bypassable floor: an agent/project
+policy can relax them, and YOLO mode auto-approves them. The approval dialog
+cannot relax the global `ssh_write`/`ssh_edit` denies, though user-owned global
+agent policy can intentionally override them. Also, the permission package can
+continue advertising the allowed/ask SSH tools after `/ssh off`; calls then fail
+closed because no SSH target is active. Keep project and agent permission files
+absent or audited, use least-privileged SSH accounts, and do not treat this
+profile as production-safe until host plus exact command are enforced by one
+non-overridable gate.
+
+`pi-safe` remains the hard-simple local inspection profile. It limits the agent
+to `read`, `grep`, `find`, and `ls` while disabling every extension, project
+trust, and context-file loading. It is not a process sandbox: a shell command
+you manually enter with Pi's `!command` escape still runs as your user.
+
+### Protocol Ops task engine
+
+The Pi installer also links one dependency-free, repository-owned extension.
+It borrows the useful parts of Tura's command batches and runtime manuals while
+keeping remote mutation completely outside the new path:
+
+- `ops_task` declares an exact task type, objective, ticket, and inventory host
+  set. An extension-owned dialog asks you to approve that literal host list for
+  named reads for 12 hours, then loads only the matching versioned runbook.
+- `ops_observe` expands audited profile/check IDs, validates the complete batch,
+  and then runs independent SSH reads in parallel across at most four hosts;
+  checks remain sequential on each host. It accepts no command text and does
+  not require `/ssh HOST` first.
+- `ops_checkpoint` stores the compact phase, confirmed facts, blockers, recent
+  observation receipts, and next steps in Pi's append-only session tree. The
+  state survives compaction, resume, and tree navigation.
+
+You use it through normal conversation. For example:
+
+```text
+Wire lab-dev-app01 into Icinga. First inspect it and prepare the plan.
+```
+
+Pi can declare an `icinga-onboard` task, run the inherited `baseline` and
+`icinga`/`icinga_config` observations against that exact inventory alias, and
+checkpoint the plan without a manual `/ssh` mode switch. `/ops status`,
+`/ops catalog`, and `/ops reset` expose the small human control surface.
+
+The auto-allowed boundary is the outer tool, so the extension performs its own
+all-or-nothing preflight before starting SSH. Every target must be both in the
+inventory and in the confirmed, unexpired task scope; `done` and `blocked`
+phases close reads until a new task is declared. Every operation must resolve
+to a named check in `pi/extensions/protocol-ops/checks/catalog.json`; one
+unknown target, check, profile, extra field, or size-limit violation means zero
+SSH processes start. Default incident profiles are deliberately compact. Log,
+socket, and recursive configuration observations are explicit incident
+follow-ups (onboarding runbooks include the relevant configuration profile);
+sensitive log checks trigger a second exact-host/check confirmation.
+
+Reads run through `ssh` with agent/X11 forwarding, all configured forwards,
+local commands, and host-key updates disabled. Strict host-key checking is on,
+so establish a new host key deliberately with normal `ssh` before using the
+batch tool. Each check is capped at 8 KiB, the rendered batch at 128 KiB, and a
+stuck client escalates from TERM to KILL with a hard settlement deadline.
+Results retain request order and are recorded under a receipt ID. “Collected”
+means the diagnostic command returned one of its documented exit codes; it
+does not mean that a process, unit, or host is healthy.
+
+Remote output is untrusted. It becomes Pi tool-result/session content and is
+sent to the selected model provider; only bounded receipt metadata is copied
+into Protocol Ops checkpoint state. Session/tree changes are blocked while a
+batch is active, and task identity is rechecked before its receipt is attached.
+
+This is deliberately not a generic read-only shell classifier. The catalog's
+commands are trusted executable configuration reviewed with the dotfiles, while
+the model can choose only their IDs. Add machine-specific named reads by copying
+`checks/local.example.json` to
+`${XDG_CONFIG_HOME:-$HOME/.config}/protocol-ops/agent/checks.json`, changing its
+IDs and commands, and keeping the file owned by the current user and not
+group/world writable. Local additions cannot replace bundled IDs or profiles
+and default to sensitive unless explicitly reviewed and marked otherwise.
+
+Runbooks live under `pi/extensions/protocol-ops/runbooks/` and use explicit
+parent inheritance. Unknown parents, cycles, missing profiles, and path escapes
+fail extension loading. Each task snapshots the manual and check-catalog hashes;
+after a catalog change, observation fails until the task is declared again.
+Manuals can contribute knowledge only: they never add tools or relax policy.
+The confirmed task state establishes only the expiring named-read scope.
+Checkpoint prose, facts, receipts, and phases are non-authorizing;
+`awaiting_approval` is just a workflow label. A checkpoint generated in the
+same model turn as an observation is rejected so pre-generated “facts” cannot
+outrun the evidence. `ssh_bash` remains `ask`,
+`ssh_write`/`ssh_edit` remain denied, and this first version intentionally has
+no apply tool.
+
+Run the focused regression suite after changing the extension, catalogs, or
+policy:
+
+```sh
+cd pi/extensions/protocol-ops
+npm test
+```
+
+On a fresh machine, skip installing the third-party operations packages while
+retaining the theme and Pi base install:
+
+```sh
+./install-pi.sh --no-ops-packages
+```
+
+This switch does not uninstall packages that are already present; use Pi's
+package removal command when intentionally retiring an existing installation.
+
+The installer bridges only the user-owned `design-protocol-paper` Codex skill
+when it exists; Codex's hidden system skills and plugin cache are never exposed.
+Select additional audited user skills without editing the installer:
+
+```sh
+PI_CODEX_SKILLS='design-protocol-paper icinga-ops nagios-ops' \
+  ./install-pi.sh --config-only
+```
+
+Keep Codex installed for now as the skill-authoring and validation workshop.
+Pi understands standard `SKILL.md` packages, but Codex's built-in Skill Creator
+itself is harness-specific. This lets both agents share finished domain skills
+without copying credentials or committing machine state.
+
 ## Modules
 
 - `ghostty/themes/protocol-ink` owns color semantics only.
@@ -67,6 +249,28 @@ needed.
   scheme fragment for Windows Terminal.
 - `windows-terminal/install.ps1` installs that fragment without folding it
   into the repository or replacing the user's complete settings file.
+- `pi/themes/protocol-ink.json` maps Pi's complete semantic TUI palette onto
+  the same ink, paper, teal, coral, diagnostics, and diff semantics.
+- `pi/version.txt` pins the Pi runtime validated with the operations package set;
+  bump it deliberately after testing a newer Pi release.
+- `pi/settings.fragment.json` owns only Pi's theme and external editor; the
+  installer merges it without replacing provider, model, package, or session
+  state.
+- `pi/packages.txt` is the small audited and exact-version-pinned Pi operations
+  package set; the installer adds it without replacing unrelated packages.
+- `pi/pi-permissions.jsonc` is the portable baseline policy for local and SSH
+  tools plus the exact-name Protocol Ops state/read tools; denied remote
+  mutation cannot be approved through the UI.
+- `pi/extensions/protocol-ops/` owns the inventory-bounded task router, audited
+  parallel read batches, inherited runbooks, append-only checkpoints, and its
+  dependency-free regression tests. It has no mutation capability.
+- `pi/permission-system.config.fragment.json` keeps the permission extension
+  enabled with debug logging and YOLO auto-approval disabled.
+- `bin/pi-safe` is the explicit read-only-agent-tools Pi profile for
+  inspection work; it disables all extensions and documents the remaining
+  manual shell escape.
+- `install-pi.sh` is the standalone Mac/Linux/WSL installer and curated Codex
+  skill bridge; it never touches `~/.pi/agent/auth.json`.
 - `shell/protocol-ink.dircolors` maps GNU file categories onto the same ANSI
   semantics used by Ghostty.
 - `shell/protocol-ink-prompt.sh` renders the current command as a Manual /
@@ -84,9 +288,16 @@ needed.
   monitoring adapters; the supplied adapters support Icinga and Nagios.
 - `lib/protocol-ops/` owns the shared Bash 3.2 inventory validation, private
   temp lifecycle, responsive fzf frame, palette, check profiles, and adapters.
+- `bin/zellij-help` renders the editable `zellij/cheatsheet.md` as an
+  on-demand floating key index; `Ctrl-o ?` opens it and `q` closes it.
+- `zellij/config.kdl` selects the portable layout, suppresses generated
+  session names, and routes scrollback editing into Protocol Ink Neovim.
+- `zellij/layouts/protocol-index.kdl` replaces the compact footer with one
+  persistent top-row tab index and deliberately omits the full status bar.
 - `zellij/themes/protocol-ink.kdl` is reusable independently of the full
-  Zellij configuration and defines explicit list/table selection states for
-  keyboard-driven plugins such as the session manager.
+  Zellij configuration and defines the quiet tab ledger plus explicit
+  list/table selection states for keyboard-driven plugins such as the session
+  manager.
 - `Ctrl-o d` detaches from the current Zellij session without destroying it,
   which is also how the isolated monitoring workstation returns to the host.
 - `nvim/colors/protocol-ink.vim` carries the editor palette, Treesitter/LSP
@@ -274,5 +485,8 @@ XDG_CONFIG_HOME="$PWD" \
   --config-file=ghostty/config.ghostty
 zellij --config zellij/config.kdl --config-dir zellij setup --check
 nvim --headless '+colorscheme protocol-ink' '+qall'
-jq empty windows-terminal/protocol-ink.json
+sh -n install-terminal.sh install-wsl.sh install-pi.sh bin/pi-safe
+jq empty windows-terminal/protocol-ink.json \
+  pi/settings.fragment.json pi/themes/protocol-ink.json \
+  pi/pi-permissions.jsonc pi/permission-system.config.fragment.json
 ```

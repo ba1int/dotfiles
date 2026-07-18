@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+launcher_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ -x "$launcher_dir/pi" ]; then
+    pi_command="$launcher_dir/pi"
+elif command -v pi >/dev/null 2>&1; then
+    pi_command=pi
+else
+    printf 'pi-safe: pi is not installed or is not on PATH\n' >&2
+    exit 127
+fi
+
+# This profile deliberately bypasses every extension, including the optional
+# permission and SSH modules. It limits model-facing tools and suppresses
+# executable/context resources; a user-entered !command still runs.
+exec "$pi_command" \
+    --tools read,grep,find,ls \
+    --no-extensions \
+    --no-approve \
+    --no-context-files \
+    "$@"

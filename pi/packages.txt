@@ -1,0 +1,3 @@
+# Reviewed Pi operations packages. Exact versions stay pinned during pi update.
+npm:pi-permission-system@0.8.0
+npm:@ogulcancelik/pi-ssh-tools@0.1.5

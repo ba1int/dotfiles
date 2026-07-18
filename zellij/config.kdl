@@ -106,6 +106,18 @@ keybinds clear-defaults=true {
         bind "w" { SearchToggleOption "Wrap"; }
     }
     session {
+        bind "?" {
+            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/zellij-help\"" {
+                floating true
+                close_on_exit true
+                x "5%"
+                y "5%"
+                width "90%"
+                height "90%"
+                name "ZELLIJ / KEY INDEX"
+            }
+            SwitchToMode "normal"
+        }
         bind "a" {
             LaunchOrFocusPlugin "zellij:about" {
                 floating true
@@ -300,6 +312,13 @@ web_client {
 //   - false (Default)
 // 
 simplified_ui true
+
+// The tab ledger needs the records, not a randomly generated session label.
+ui {
+    pane_frames {
+        hide_session_name true
+    }
+}
  
 // Enable OSC8 hyperlink output
 // Options:
@@ -338,10 +357,9 @@ default_mode "normal"
 // 
 // default_cwd "/tmp"
  
-// The name of the default layout to load on startup
-// Default: "default"
-// 
-default_layout "compact"
+// The Protocol Index layout replaces the compact footer with a single
+// persistent tab ledger at the top. It deliberately omits the status bar.
+default_layout "protocol-index"
  
 // The folder in which Zellij will look for layouts
 // (Requires restart)
@@ -423,7 +441,8 @@ pane_frames true
  
 // Path to the default editor to use to edit pane scrollbuffer
 // Default: $EDITOR or $VISUAL
-// scrollback_editor "/usr/bin/vim"
+// Resolve Neovim through each machine's PATH so macOS and WSL share this file.
+scrollback_editor "/usr/bin/env nvim"
  
 // A fixed name to always give the Zellij session.
 // Consider also setting `attach_to_session true,`

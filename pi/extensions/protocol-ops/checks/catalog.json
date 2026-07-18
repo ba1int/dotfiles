@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "id": "hostname",
+      "label": "Host identity",
+      "command": "hostname -f 2>/dev/null || hostname"
+    },
+    {
+      "id": "os_release",
+      "label": "Operating system",
+      "command": "if [ -r /etc/os-release ]; then awk -F= '$1 == \"NAME\" && name == \"\" { name = substr($0, index($0, \"=\") + 1) } $1 == \"PRETTY_NAME\" { value = substr($0, index($0, \"=\") + 1); gsub(/^\"|\"$/, \"\", value); print value; printed = 1; exit } END { if (!printed) { gsub(/^\"|\"$/, \"\", name); print (name != \"\" ? name : \"Linux\") } }' /etc/os-release; else uname -sr; fi"
+    },
+    {
+      "id": "uptime_load",
+      "label": "Uptime and load",
+      "command": "uptime 2>/dev/null || { cat /proc/uptime 2>/dev/null; cat /proc/loadavg 2>/dev/null; }"
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "command": "if command -v free >/dev/null 2>&1; then free -m; else cat /proc/meminfo 2>/dev/null | head -n 20; fi"
+    },
+    {
+      "id": "disk_root",
+      "label": "Root filesystem",
+      "command": "df -P /"
+    },
+    {
+      "id": "failed_units",
+      "label": "Failed systemd units",
+      "command": "if command -v systemctl >/dev/null 2>&1; then systemctl --failed --no-legend --no-pager 2>&1; else printf 'systemd unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1]
+    },
+    {
+      "id": "monitoring_processes",
+      "label": "Monitoring processes",
+      "command": "ps -eo pid=,ppid=,user=,stat=,etime=,comm= | awk 'BEGIN { IGNORECASE=1 } /icinga|nagios|naemon|nrpe|thruk/ { print }' | head -n 200"
+    },
+    {
+      "id": "listening_ports",
+      "label": "Listening sockets",
+      "command": "if command -v ss >/dev/null 2>&1; then ss -lntup 2>&1 | head -n 200; elif command -v netstat >/dev/null 2>&1; then netstat -lntup 2>&1 | head -n 200; else printf 'socket inventory unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1]
+    },
+    {
+      "id": "recent_errors",
+      "label": "Recent system errors",
+      "command": "if command -v journalctl >/dev/null 2>&1; then journalctl -p err -n 100 --no-pager -o short-iso 2>&1; else printf 'journal unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1],
+      "timeout_seconds": 15,
+      "sensitivity": "sensitive"
+    },
+    {
+      "id": "icinga_processes",
+      "label": "Icinga processes",
+      "command": "pgrep -l -f 'icinga2|icingaweb2' 2>&1",
+      "accepted_exit_codes": [0, 1]
+    },
+    {
+      "id": "icinga_unit",
+      "label": "Icinga systemd unit",
+      "command": "if command -v systemctl >/dev/null 2>&1; then systemctl show icinga2 --no-pager --property=LoadState,ActiveState,SubState,UnitFileState,MainPID,Result,NRestarts,ActiveEnterTimestamp,InactiveEnterTimestamp 2>&1; else printf 'systemd unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1, 3, 4]
+    },
+    {
+      "id": "icinga_logs",
+      "label": "Icinga journal",
+      "command": "if command -v journalctl >/dev/null 2>&1; then journalctl -u icinga2 -n 120 --no-pager -o short-iso 2>&1; else printf 'journal unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1],
+      "timeout_seconds": 15,
+      "sensitivity": "sensitive"
+    },
+    {
+      "id": "icinga_paths",
+      "label": "Icinga config paths",
+      "command": "for path in /etc/icinga2 /etc/icinga /usr/lib/nagios/plugins /usr/lib64/nagios/plugins; do if [ -e \"$path\" ]; then ls -ld \"$path\"; fi; done"
+    },
+    {
+      "id": "icinga_objects",
+      "label": "Icinga service objects",
+      "command": "for path in /etc/icinga2/conf.d /etc/icinga2/zones.d; do if [ -d \"$path\" ]; then grep -R -n -E '(^|[[:space:]])(apply|object)[[:space:]]+Service' \"$path\" 2>/dev/null; fi; done | head -n 200",
+      "accepted_exit_codes": [0, 1],
+      "timeout_seconds": 15
+    },
+    {
+      "id": "nagios_processes",
+      "label": "Nagios processes",
+      "command": "pgrep -l -f 'nagios|naemon|nrpe' 2>&1",
+      "accepted_exit_codes": [0, 1]
+    },
+    {
+      "id": "nagios_units",
+      "label": "Nagios systemd units",
+      "command": "if command -v systemctl >/dev/null 2>&1; then for unit in nagios nagios4 naemon nrpe; do printf '%s\\n' \"[$unit]\"; systemctl show \"$unit\" --no-pager --property=LoadState,ActiveState,SubState,UnitFileState,MainPID,Result,NRestarts,ActiveEnterTimestamp,InactiveEnterTimestamp 2>&1; done; else printf 'systemd unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1, 3, 4]
+    },
+    {
+      "id": "nagios_logs",
+      "label": "Nagios journal",
+      "command": "if command -v journalctl >/dev/null 2>&1; then journalctl -u nagios -u nagios4 -u naemon -u nrpe -n 120 --no-pager -o short-iso 2>&1; else printf 'journal unavailable\\n'; fi",
+      "accepted_exit_codes": [0, 1],
+      "timeout_seconds": 15,
+      "sensitivity": "sensitive"
+    },
+    {
+      "id": "nagios_paths",
+      "label": "Nagios config paths",
+      "command": "for path in /etc/nagios /etc/nagios3 /etc/nagios4 /etc/naemon /usr/local/nagios/etc /usr/lib/nagios/plugins /usr/lib64/nagios/plugins; do if [ -e \"$path\" ]; then ls -ld \"$path\"; fi; done"
+    },
+    {
+      "id": "nagios_objects",
+      "label": "Nagios object definitions",
+      "command": "for path in /etc/nagios /etc/nagios3 /etc/nagios4 /etc/naemon /usr/local/nagios/etc; do if [ -d \"$path\" ]; then grep -R -n -E '^[[:space:]]*define[[:space:]]+(host|service)' \"$path\" 2>/dev/null; fi; done | head -n 200",
+      "accepted_exit_codes": [0, 1],
+      "timeout_seconds": 15
+    },
+    {
+      "id": "middleware_processes",
+      "label": "Middleware processes",
+      "command": "ps -eo pid=,ppid=,user=,stat=,etime=,comm= | awk 'BEGIN { IGNORECASE=1 } /java|jboss|wildfly|tomcat|websphere|weblogic|nginx|httpd|apache2|haproxy|rabbitmq|kafka/ { print }' | head -n 200"
+    }
+  ],
+  "profiles": {
+    "baseline": ["hostname", "os_release", "uptime_load", "memory", "disk_root", "failed_units"],
+    "monitoring": ["monitoring_processes"],
+    "network": ["listening_ports"],
+    "icinga": ["icinga_processes", "icinga_unit"],
+    "icinga_config": ["icinga_paths", "icinga_objects"],
+    "nagios": ["nagios_processes", "nagios_units"],
+    "nagios_config": ["nagios_paths", "nagios_objects"],
+    "middleware": ["middleware_processes"],
+    "system_logs": ["recent_errors"],
+    "icinga_logs": ["icinga_logs"],
+    "nagios_logs": ["nagios_logs"]
+  }
+}

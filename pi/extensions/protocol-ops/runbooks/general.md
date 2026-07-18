@@ -1,0 +1,1 @@
+Keep the task bounded. Use only explicitly declared inventory targets and audited named observations. If the task becomes an incident, alert, onboarding, or middleware problem, start a new `ops_task` with the more specific task type so the corresponding manual is loaded.

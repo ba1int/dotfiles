@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "id": "company_app_status",
+      "label": "Company app status",
+      "command": "/opt/company/bin/appctl status --no-color",
+      "timeout_seconds": 10,
+      "accepted_exit_codes": [0, 1],
+      "sensitivity": "sensitive"
+    }
+  ],
+  "profiles": {
+    "company_middleware": ["company_app_status"]
+  }
+}

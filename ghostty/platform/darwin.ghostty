@@ -1,5 +1,5 @@
-# Native frame with the tab index integrated into the titlebar.
+# Native frame with the titlebar hidden for a cleaner fullscreen view.
 window-decoration = auto
-macos-titlebar-style = tabs
+macos-titlebar-style = hidden
 macos-titlebar-proxy-icon = hidden
 window-title-font-family = TX-02

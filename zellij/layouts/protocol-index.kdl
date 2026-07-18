@@ -1,0 +1,11 @@
+// Protocol Ink / one-line running tab index
+// Keeps the full viewport while making every tab a persistent record.
+
+layout {
+    pane size=1 borderless=true {
+        plugin location="zellij:tab-bar" {
+            hide_swap_layout_indication true
+        }
+    }
+    pane
+}

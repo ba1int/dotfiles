@@ -161,6 +161,8 @@ if [ "$install_ghostty" -eq 1 ]; then
 fi
 
 link_path "$repo_root/zellij/config.kdl" "$zellij_dir/config.kdl"
+link_path "$repo_root/zellij/cheatsheet.md" "$zellij_dir/cheatsheet.md"
+link_path "$repo_root/zellij/layouts/protocol-index.kdl" "$zellij_dir/layouts/protocol-index.kdl"
 link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protocol-ink.kdl"
 
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
@@ -171,6 +173,7 @@ link_path "$repo_root/bin/hop" "$HOME/.local/bin/hop"
 link_path "$repo_root/bin/peek" "$HOME/.local/bin/peek"
 link_path "$repo_root/bin/kb" "$HOME/.local/bin/kb"
 link_path "$repo_root/bin/pulse" "$HOME/.local/bin/pulse"
+link_path "$repo_root/bin/zellij-help" "$HOME/.local/bin/zellij-help"
 
 if [ "$install_lab" -eq 1 ]; then
     link_path "$repo_root/bin/lab" "$HOME/.local/bin/lab"

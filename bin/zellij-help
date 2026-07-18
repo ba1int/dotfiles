@@ -1,0 +1,114 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Usage: zellij-help [--plain]
+
+Show the installed Protocol Ink Zellij key index.
+
+Options:
+  --plain       Print without ANSI styling or a pager.
+  -h, --help    Show this help.
+
+Set ZELLIJ_HELP_FILE to use a different Markdown key index.
+EOF
+}
+
+plain=0
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        --plain) plain=1 ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'zellij-help: unknown option: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ -n "${ZELLIJ_HELP_FILE:-}" ]; then
+    help_file=$ZELLIJ_HELP_FILE
+elif [ -r "$config_home/zellij/cheatsheet.md" ]; then
+    help_file="$config_home/zellij/cheatsheet.md"
+elif [ -r "$script_dir/../zellij/cheatsheet.md" ]; then
+    help_file="$script_dir/../zellij/cheatsheet.md"
+else
+    printf '%s\n' \
+        'zellij-help: cheatsheet missing; rerun install-terminal.sh' >&2
+    exit 1
+fi
+
+[ -r "$help_file" ] || {
+    printf 'zellij-help: cannot read cheatsheet: %s\n' "$help_file" >&2
+    exit 1
+}
+
+use_color=0
+if [ "$plain" -eq 0 ] && [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] \
+    && [ -z "${NO_COLOR+x}" ]; then
+    use_color=1
+fi
+
+render_index() {
+    LC_ALL=C awk -v use_color="$use_color" '
+        BEGIN {
+            esc = sprintf("%c", 27)
+            reset = esc "[0m"
+            accent = esc "[1;38;2;120;184;179m"
+            key = esc "[1;38;2;243;240;231m"
+            muted = esc "[38;2;170;168;159m"
+        }
+        /^# / {
+            text = substr($0, 3)
+            print use_color ? accent text reset : text
+            next
+        }
+        /^## / {
+            text = substr($0, 4)
+            print use_color ? accent text reset : text
+            next
+        }
+        /^---$/ {
+            rule = "----------------------------------------------------------------"
+            print use_color ? muted rule reset : rule
+            next
+        }
+        {
+            line = $0
+            if (!use_color) {
+                gsub(/`/, " ", line)
+                print line
+                next
+            }
+
+            rendered = ""
+            while (match(line, /`[^`]+`/)) {
+                rendered = rendered substr(line, 1, RSTART - 1)
+                rendered = rendered " " key substr(line, RSTART + 1, RLENGTH - 2) reset " "
+                line = substr(line, RSTART + RLENGTH)
+            }
+            print rendered line
+        }
+    ' "$help_file"
+}
+
+if [ "$plain" -eq 1 ] || [ ! -t 1 ]; then
+    render_index
+elif command -v less >/dev/null 2>&1; then
+    render_index | LESS= LESSHISTFILE=- less -R \
+        -P 'ZELLIJ / KEY INDEX  |  q close  |  / search  |  j k scroll'
+else
+    render_index
+    printf '\nPress Enter to close.\n' >&2
+    IFS= read -r _ || true
+fi
