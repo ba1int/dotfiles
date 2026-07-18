@@ -137,8 +137,11 @@ test("pulse config remains strict, private, and environment-overridable", () => 
 
 test("extension initialization can remove the inherited API password before any subprocess", () => {
 	const env = { PULSE_ICINGA_PASSWORD: "captured" };
-	assert.equal(takeInheritedIcingaPassword(env), "captured");
+	const processCache = {};
+	assert.equal(takeInheritedIcingaPassword(env, processCache), "captured");
 	assert.equal(env.PULSE_ICINGA_PASSWORD, undefined);
+	assert.deepEqual(Object.keys(processCache), []);
+	assert.equal(takeInheritedIcingaPassword({}, processCache), "captured");
 });
 
 test("Icinga password is removed from the Pi environment even when capture fails", () => {

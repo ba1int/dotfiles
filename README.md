@@ -500,8 +500,10 @@ which is used only by the self-signed mock lab.
 above. When the extension initializes, it captures and removes an inherited
 `PULSE_ICINGA_PASSWORD` before any Protocol Ops tool can start a subprocess.
 Keep the private `pulse.conf` as the durable source because an environment-only
-password survives only for the current extension lifetime. After changing that
-file, use `/reload` or restart Pi. Production should use a dedicated API user
+password is retained only in Pi's process-local, non-environment cache so it
+survives `/reload` without reaching child processes. Restart Pi to change an
+environment-only credential; after changing `pulse.conf`, use `/reload` or
+restart Pi. Production should use a dedicated API user
 limited to read-only object queries rather than the lab's intentionally broad
 disposable credential. The
 minimum permissions for this tool are `objects/query/Host`,

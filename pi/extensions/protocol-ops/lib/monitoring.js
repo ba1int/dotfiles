@@ -26,6 +26,7 @@ const PULSE_CONFIG_KEYS = new Set([
 	"connect_timeout",
 	"max_time",
 ]);
+const ICINGA_PASSWORD_CACHE = Symbol.for("protocol-ops.icinga-password.v1");
 
 const HOST_ATTRS = [
 	"display_name",
@@ -70,10 +71,22 @@ export function resolvePulseConfigPath(env = process.env) {
 	return join(configHome, "protocol-ops", "pulse.conf");
 }
 
-export function takeInheritedIcingaPassword(env = process.env) {
+export function takeInheritedIcingaPassword(env = process.env, cache = globalThis) {
 	const password = env.PULSE_ICINGA_PASSWORD;
 	delete env.PULSE_ICINGA_PASSWORD;
-	return password;
+	if (password !== undefined) {
+		if (Object.prototype.hasOwnProperty.call(cache, ICINGA_PASSWORD_CACHE)) {
+			cache[ICINGA_PASSWORD_CACHE] = password;
+		} else {
+			Object.defineProperty(cache, ICINGA_PASSWORD_CACHE, {
+				value: password,
+				writable: true,
+				configurable: false,
+				enumerable: false,
+			});
+		}
+	}
+	return cache[ICINGA_PASSWORD_CACHE];
 }
 
 export function parsePulseConfig(text, source = "pulse config") {
