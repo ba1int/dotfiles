@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,6 +14,9 @@ import {
 	runBounded,
 	runSshCheck,
 } from "../lib/observe.js";
+
+const spawnScriptWithSh = (script, args, options) =>
+	spawn("/bin/sh", [script, ...args], options);
 
 function fixture() {
 	const checks = new Map([
@@ -178,7 +182,7 @@ test("SSH runner passes one literal host and the audited command only over stdin
 					acceptedExitCodes: [0],
 				},
 			},
-			{ sshBin: fakeSsh },
+			{ sshBin: fakeSsh, spawnProcess: spawnScriptWithSh },
 		);
 		assert.equal(result.collected, true);
 		assert.equal(result.stdout, "fixture output");
@@ -218,7 +222,7 @@ test("SSH output neutralizes Unicode direction controls", async () => {
 				acceptedExitCodes: [0],
 			},
 		},
-		{ sshBin: fakeSsh },
+		{ sshBin: fakeSsh, spawnProcess: spawnScriptWithSh },
 	);
 	assert.doesNotMatch(result.stdout, /[\u202a-\u202e]/u);
 	assert.match(result.stdout, /�spoof/);
@@ -250,7 +254,7 @@ test("SSH runner bounds output and reports spawn failures as data", async () => 
 				acceptedExitCodes: [0],
 			},
 		},
-		{ sshBin: fakeSsh, maxOutputBytes: 128 },
+		{ sshBin: fakeSsh, maxOutputBytes: 128, spawnProcess: spawnScriptWithSh },
 	);
 	assert.equal(bounded.collected, false);
 	assert.equal(bounded.failure, "output_limit");
@@ -304,7 +308,12 @@ test("SSH runner escalates TERM to KILL and has a hard settlement deadline", asy
 				acceptedExitCodes: [0],
 			},
 		},
-		{ sshBin: fakeSsh, killGraceMs: 20, settleGraceMs: 200 },
+		{
+			sshBin: fakeSsh,
+			killGraceMs: 20,
+			settleGraceMs: 200,
+			spawnProcess: spawnScriptWithSh,
+		},
 	);
 	assert.equal(trapped.failure, "timeout");
 	assert.equal(trapped.signal, "SIGKILL");
