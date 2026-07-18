@@ -86,6 +86,10 @@ test("checkpoint rejects command-shaped extras and remains non-authorizing", () 
 	assert.deepEqual(checkpoint.facts, ["Unit is failed"]);
 	const later = checkpointTask(checkpoint, { phase: "plan", summary: "Plan drafted" }, { now });
 	assert.deepEqual(later.facts, ["Unit is failed"]);
+	assert.throws(
+		() => checkpointTask({ ...later, phase: "done" }, { phase: "plan", summary: "Reopen" }, { now }),
+		/task is done.*instead of reopening/,
+	);
 });
 
 test("checkpoint cannot outrun task declarations or attempted reads in one model turn", () => {
@@ -94,6 +98,7 @@ test("checkpoint cannot outrun task declarations or attempted reads in one model
 		lastTaskDeclarationTurnIndex: null,
 		lastObservationTurnIndex: null,
 		blockedObservationTurnIndex: null,
+		lastMutationTurnIndex: null,
 	};
 	assert.doesNotThrow(() => assertCheckpointTurnAllowed(base));
 	assert.throws(
@@ -107,6 +112,10 @@ test("checkpoint cannot outrun task declarations or attempted reads in one model
 	assert.throws(
 		() => assertCheckpointTurnAllowed({ ...base, lastObservationTurnIndex: 7 }),
 		/Protocol Ops read/,
+	);
+	assert.throws(
+		() => assertCheckpointTurnAllowed({ ...base, lastMutationTurnIndex: 7 }),
+		/Protocol Ops mutation/,
 	);
 });
 

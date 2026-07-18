@@ -29,6 +29,7 @@ export function assertCheckpointTurnAllowed({
 	lastTaskDeclarationTurnIndex,
 	lastObservationTurnIndex,
 	blockedObservationTurnIndex,
+	lastMutationTurnIndex,
 }) {
 	if (lastTaskDeclarationTurnIndex === currentTurnIndex || blockedObservationTurnIndex === currentTurnIndex) {
 		throw new Error(
@@ -38,6 +39,11 @@ export function assertCheckpointTurnAllowed({
 	if (lastObservationTurnIndex === currentTurnIndex) {
 		throw new Error(
 			"ops_checkpoint was generated in the same model turn as a Protocol Ops read; inspect the result and checkpoint on the next model turn",
+		);
+	}
+	if (lastMutationTurnIndex === currentTurnIndex) {
+		throw new Error(
+			"ops_checkpoint was generated in the same model turn as a Protocol Ops mutation; inspect the result on the next turn",
 		);
 	}
 }
@@ -279,6 +285,9 @@ export function createTask(params, { inventory, runbooks, now = () => new Date()
 
 export function checkpointTask(current, params, { now = () => new Date() } = {}) {
 	if (!current?.active) throw new Error("no active Protocol Ops task; call ops_task first");
+	if (current.phase === "done" || current.phase === "blocked") {
+		throw new Error(`Protocol Ops task is ${current.phase}; declare ops_task again instead of reopening it`);
+	}
 	const input = assertExactKeys(
 		params,
 		["phase", "summary", "facts", "next_steps", "blockers"],

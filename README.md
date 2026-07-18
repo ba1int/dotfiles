@@ -88,13 +88,17 @@ sessions, package storage, and model selection remain machine-local:
 | Protocol Ops task/checkpoint state | allow |
 | Protocol Ops audited observation batches | allow |
 | Protocol Ops typed Icinga object/check queries | allow |
+| Protocol Ops normal-account action | allow; exact approval inside tool |
 | Unknown registered tools, MCP, external paths | ask |
 
-The policy allows the exact Protocol Ops tool names, but `ops_task` has its own
-interactive gate: you approve every literal host before it creates a 12-hour
-audited-read scope. An inventory filter is expanded before that dialog and
-cannot silently add later hosts. The scope never includes arbitrary shell or
-any mutation.
+The policy allows the exact Protocol Ops tool names, but the extension owns the
+non-bypassable gates. `ops_task` asks you to approve every literal host before
+it creates a 12-hour audited-read scope. An inventory filter is expanded before
+that dialog and cannot silently add later hosts. That scope never includes
+arbitrary shell or mutation. The separately typed `ops_account` action performs
+its own preflight and shows the complete mutation plan in a second dialog; the
+outer policy allow exists only so a generic approval layer cannot replace that
+action-specific gate.
 
 Start Pi and explicitly enter one remote context:
 
@@ -137,8 +141,9 @@ you manually enter with Pi's `!command` escape still runs as your user.
 ### Protocol Ops task engine
 
 The Pi installer also links one dependency-free, repository-owned extension.
-It borrows the useful parts of Tura's command batches and runtime manuals while
-keeping remote mutation completely outside the new path:
+It borrows the useful parts of Tura's command batches and runtime manuals. Most
+of it is read/state only; the sole mutation slice is one narrow normal-account
+action rather than a generic remote command surface:
 
 - `ops_inventory` performs a bounded, case-insensitive local inventory search
   without SSH, API access, confirmation, or task authority. Natural shorthand
@@ -163,6 +168,11 @@ keeping remote mutation completely outside the new path:
   service checks, state/attempt metadata, and bounded last-result output for
   declared targets. The model cannot supply an endpoint, credentials, HTTP
   method, filter expression, attribute list, or request body.
+- `ops_account` supports only an active, ticketed `account-provision` task on
+  at most four already-approved inventory hosts. It can create one portable
+  normal user with `/bin/bash` or `/bin/sh`, a home directory, no supplementary
+  groups, and a forced password change. It cannot edit an existing user, grant
+  sudo, accept command text, or perform another kind of mutation.
 - `ops_checkpoint` stores the compact phase, confirmed facts, blockers, recent
   observation receipts, and next steps in Pi's append-only session tree. The
   state survives compaction, resume, and tree navigation.
@@ -236,10 +246,34 @@ Manuals can contribute knowledge only: they never add tools or relax policy.
 The confirmed task state establishes only the expiring named-read scope.
 Checkpoint prose, facts, receipts, and phases are non-authorizing;
 `awaiting_approval` is just a workflow label. A checkpoint generated in the
-same model turn as an observation is rejected so pre-generated “facts” cannot
-outrun the evidence. `ssh_bash` remains `ask`,
-`ssh_write`/`ssh_edit` remain denied, and this first version intentionally has
-no apply tool.
+same model turn as an observation or mutation is rejected so pre-generated
+“facts” cannot outrun the evidence. `ssh_bash` remains `ask` and
+`ssh_write`/`ssh_edit` remain denied. The account action is not implemented
+through those generic SSH mutation tools.
+
+For account provisioning, the executor first proves on every target that the
+account is absent, its fixed tools exist, and the current SSH identity already
+has non-interactive root through `sudo -n`. It does not install sudo, edit
+sudoers, or discover a privilege-escalation route. The exact plan and pinned
+preflight hashes receive a sealed Luna xhigh advisory review, but that reviewer
+has no tools and no authority: malformed, unavailable, approving, or blocking
+review output cannot skip the final human dialog. Immediately before apply the
+tool repeats preflight and rejects drift.
+
+Only fixed argument vectors run during apply: `useradd`, password delivery to
+`chpasswd` over stdin, `chage`, exact postchecks, and a bounded rollback. The
+temporary password is generated locally after approval, never enters either
+model's context or an argv, and is written to a current-user-owned `0600` file
+under `${XDG_STATE_HOME:-$HOME/.local/state}/protocol-ops/secrets`. A known
+created account is removed if a later step or verification fails. A timeout or
+transport failure during `useradd` is deliberately marked uncertain and is
+never followed by an automatic delete; the receipt becomes a hard manual stop.
+
+The disposable monitoring lab installs `operator` with passwordless sudo on its
+bastion and mock targets so this full path can be exercised. That is lab image
+scaffolding, not deployable account logic. On work hosts, Protocol Ops only
+detects an already-existing `sudo -n` capability and fails closed when it is
+absent.
 
 Run the focused regression suite after changing the extension, catalogs, or
 policy:
@@ -294,11 +328,11 @@ without copying credentials or committing machine state.
 - `pi/packages.txt` is the small audited and exact-version-pinned Pi operations
   package set; the installer adds it without replacing unrelated packages.
 - `pi/pi-permissions.jsonc` is the portable baseline policy for local and SSH
-  tools plus the exact-name Protocol Ops state/read tools; denied remote
-  mutation cannot be approved through the UI.
+  tools plus exact-name Protocol Ops tools. Generic remote mutation stays
+  denied; the normal-account tool owns its exact internal approval.
 - `pi/extensions/protocol-ops/` owns the inventory-bounded task router, audited
-  parallel read batches, inherited runbooks, append-only checkpoints, and its
-  dependency-free regression tests. It has no mutation capability.
+  parallel read batches, inherited runbooks, append-only checkpoints, the
+  bounded normal-account executor, and dependency-free regression tests.
 - `pi/permission-system.config.fragment.json` keeps the permission extension
   enabled with debug logging and YOLO auto-approval disabled.
 - `bin/pi-safe` is the explicit read-only-agent-tools Pi profile for

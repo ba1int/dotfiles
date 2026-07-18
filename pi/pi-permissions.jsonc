@@ -22,6 +22,7 @@
     "ops_task": "allow",
     "ops_observe": "allow",
     "ops_monitoring": "allow",
+    "ops_account": "allow",
     "ops_checkpoint": "allow"
   },
   "bash": {
