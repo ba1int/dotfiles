@@ -133,6 +133,18 @@ keybinds clear-defaults=true {
             SwitchToMode "normal"
         }
         bind "d" { Detach; }
+        bind "i" {
+            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/pi-ledger\"" {
+                floating true
+                close_on_exit true
+                x "8%"
+                y "10%"
+                width "84%"
+                height "80%"
+                name "PI / TASK LEDGER"
+            }
+            SwitchToMode "normal"
+        }
         bind "l" {
             LaunchOrFocusPlugin "zellij:layout-manager" {
                 floating true
