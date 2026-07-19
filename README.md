@@ -52,6 +52,7 @@ the current Windows Terminal default profile.
 | Shell | `shell/` | Portable Bash/Zsh prompt, `dircolors`, and semantic `man`/`less` styling |
 | Neovim | `nvim/`, `vim/` | Protocol Ink colorscheme, clipboard behavior, scrollback-safe Vim fallback |
 | Zellij | `zellij/`, `bin/zellij-help` | Theme, indexed tab bar, layout, key index, and visible selection states |
+| Remote edit | `bin/rvi` | Local themed Neovim over SSH, with narrow passwordless-sudo elevation |
 
 The installer creates symlinks instead of copying configuration. Editing the
 repository therefore updates the installed setup immediately. Existing target
@@ -63,6 +64,7 @@ files are timestamped and backed up before replacement.
 - Zellij
 - `fzf`
 - `ripgrep`
+- OpenSSH client (`ssh` and `scp`)
 
 Ghostty is optional on systems that use Windows Terminal or another terminal.
 The installer puts the bundled font in the current user's font directory; use
@@ -108,12 +110,36 @@ zellij --layout protocol-ops
 It opens `01 / DISPATCH` on the left and stacks `02 / SHELL` above
 `03 / WATCH` on the right without adding another status bar or plugin.
 
+## Remote Neovim
+
+Use the local Neovim setup against a remote path without copying dotfiles or
+logging in as root:
+
+```sh
+rvi app01 /etc/icinga2/icinga2.conf
+rvi --read-only operator@app01 /var/log/myapp/current.log
+```
+
+Files writable by the SSH user use Neovim's native SSH transport. Protected
+files are downloaded into a private local directory and opened with the same
+local theme and plugins. On exit, `rvi` shows the exact diff and asks before it
+uses remote `sudo -n` to atomically replace the file while retaining its mode,
+ownership, ACLs, extended attributes, and symlink path. It detects concurrent
+remote changes and refuses files with hard links rather than silently changing
+their semantics.
+
+The target needs standard Linux userland tools (`sh`, `sudo`, `realpath`,
+`stat`, `cksum`, `cp`, `cmp`, and `mv`) and passwordless sudo for protected
+files. SSH remains on the normal account. Directory browsing is deliberately
+read-only; for an elevated edit, give `rvi` the exact file path.
+
 ## Verify
 
 ```sh
 readlink ~/.config/nvim/init.vim
 readlink ~/.config/zellij/config.kdl
 readlink ~/.local/bin/zellij-help
+readlink ~/.local/bin/rvi
 ```
 
 On macOS, Ghostty's configuration lives under

@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly RVI_NVIM="${RVI_NVIM:-nvim}"
+rvi_tmpdir=
+
+usage() {
+    cat <<'EOF'
+Usage: rvi [--read-only] HOST /absolute/path
+
+Open a remote file in local Neovim without installing editor configuration on
+the target. Normal files use Neovim's native SSH transport. Protected files
+are staged locally, shown as a diff, and installed atomically with remote
+passwordless sudo only after confirmation.
+
+Options:
+  -R, --read-only  Never write to the target.
+  -h, --help       Show this help.
+EOF
+}
+
+rvi_die() {
+    printf 'rvi: %s\n' "$*" >&2
+    exit 1
+}
+
+rvi_cleanup_local() {
+    [[ -z ${rvi_tmpdir:-} ]] || rm -rf -- "$rvi_tmpdir"
+}
+
+rvi_validate_host() {
+    [[ $1 =~ ^([A-Za-z0-9][A-Za-z0-9._-]{0,62}@)?[A-Za-z0-9][A-Za-z0-9._-]{0,252}$ ]]
+}
+
+rvi_validate_path() {
+    [[ $1 == /* ]] || return 1
+    [[ $1 != *//* ]] || return 1
+    [[ $1 =~ ^/[A-Za-z0-9._+/@:=,-]+(/[A-Za-z0-9._+/@:=,-]+)*/?$ ]]
+}
+
+rvi_netrw_url() {
+    printf 'scp://%s//%s' "$1" "${2#/}"
+}
+
+rvi_color_enabled() {
+    [[ -t 1 && ${TERM:-dumb} != dumb && ${NO_COLOR:-} == '' ]]
+}
+
+rvi_tone() {
+    local tone=$1 text=$2 code=''
+    if rvi_color_enabled; then
+        case $tone in
+            teal)  code='38;2;126;163;174' ;;
+            coral) code='38;2;216;121;103' ;;
+            meta)  code='38;2;132;132;125' ;;
+            rule)  code='38;2;73;76;72' ;;
+        esac
+    fi
+    if [[ -n $code ]]; then
+        printf '\033[%sm%s\033[0m' "$code" "$text"
+    else
+        printf '%s' "$text"
+    fi
+}
+
+rvi_heading() {
+    printf '\n'
+    rvi_tone teal "$1"
+    rvi_tone rule '  ────────────────────────────────────────'
+    printf '\n'
+}
+
+rvi_field() {
+    rvi_tone meta "$(printf '%-12s' "$1")"
+    printf '%s\n' "$2"
+}
+
+rvi_emit_apply_script() {
+    cat <<'REMOTE_SCRIPT'
+set -eu
+
+requested=$1
+upload=$2
+expected_crc=$3
+expected_bytes=$4
+workdir=
+resolved=
+backup=
+replaced=0
+
+cleanup() {
+    status=$?
+    trap - EXIT HUP INT TERM
+    if [ "$status" -ne 0 ] && [ "$replaced" -eq 1 ] && [ -n "$backup" ] && [ -e "$backup" ]; then
+        mv -f -- "$backup" "$resolved" 2>/dev/null || true
+    fi
+    [ -z "$workdir" ] || rm -rf -- "$workdir"
+    rm -f -- "$upload"
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+resolved=$(realpath -- "$requested")
+[ -f "$resolved" ] || { printf 'rvi: target is not a regular file\n' >&2; exit 1; }
+[ -f "$upload" ] || { printf 'rvi: staged upload is missing\n' >&2; exit 1; }
+
+if links=$(stat -c '%h' -- "$resolved" 2>/dev/null); then
+    :
+else
+    links=$(stat -f '%l' -- "$resolved")
+fi
+[ "$links" -eq 1 ] || {
+    printf 'rvi: refusing to replace a file with %s hard links\n' "$links" >&2
+    exit 1
+}
+
+set -- $(cksum < "$resolved")
+[ "$1" = "$expected_crc" ] && [ "$2" = "$expected_bytes" ] || {
+    printf 'rvi: remote file changed while it was being edited; nothing applied\n' >&2
+    exit 1
+}
+
+directory=$(dirname -- "$resolved")
+workdir=$(mktemp -d "$directory/.rvi.XXXXXX")
+backup=$workdir/original
+candidate=$workdir/candidate
+
+cp -a -- "$resolved" "$backup"
+cp -a -- "$resolved" "$candidate"
+cat -- "$upload" > "$candidate"
+
+set -- $(cksum < "$resolved")
+[ "$1" = "$expected_crc" ] && [ "$2" = "$expected_bytes" ] || {
+    printf 'rvi: remote file changed just before apply; nothing applied\n' >&2
+    exit 1
+}
+
+mv -f -- "$candidate" "$resolved"
+replaced=1
+
+cmp -s -- "$upload" "$resolved" || {
+    printf 'rvi: verification failed; restoring original\n' >&2
+    exit 1
+}
+
+rm -f -- "$backup"
+replaced=0
+exit 0
+REMOTE_SCRIPT
+}
+
+rvi_main() {
+    local read_only=0 host path probe kind can_read can_write sudo_ready remote_user
+    local read_mode original edited crc bytes answer remote_upload status
+    local -a ssh_args
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -R|--read-only) read_only=1; shift ;;
+            -h|--help) usage; return 0 ;;
+            --) shift; break ;;
+            -*) rvi_die "unknown option: $1" ;;
+            *) break ;;
+        esac
+    done
+    [[ $# -eq 2 ]] || { usage >&2; return 2; }
+    host=$1
+    path=$2
+
+    rvi_validate_host "$host" || rvi_die "unsafe SSH destination: $host"
+    rvi_validate_path "$path" || rvi_die "path must be absolute and contain only portable configuration-path characters"
+    command -v "$RVI_NVIM" >/dev/null 2>&1 || rvi_die "Neovim not found: $RVI_NVIM"
+    command -v ssh >/dev/null 2>&1 || rvi_die 'ssh not found'
+
+    ssh_args=(
+        -T
+        -o ClearAllForwardings=yes
+        -o ConnectTimeout=10
+        -o ForwardAgent=no
+        -o RequestTTY=no
+        -o UpdateHostKeys=no
+    )
+
+    probe=$(ssh "${ssh_args[@]}" "$host" sh -s -- "$path" <<'REMOTE_PROBE'
+set -eu
+path=$1
+[ -e "$path" ] || { printf 'missing|0|0|0|%s\n' "$(id -un)"; exit 0; }
+if [ -d "$path" ]; then kind=directory; elif [ -f "$path" ]; then kind=file; else kind=other; fi
+readable=0; writable=0; sudo_ready=0
+[ -r "$path" ] && readable=1
+[ -w "$path" ] && writable=1
+sudo -n true >/dev/null 2>&1 && sudo_ready=1
+printf '%s|%s|%s|%s|%s\n' "$kind" "$readable" "$writable" "$sudo_ready" "$(id -un)"
+REMOTE_PROBE
+    ) || rvi_die "could not inspect $host:$path"
+
+    IFS='|' read -r kind can_read can_write sudo_ready remote_user <<< "$probe"
+    [[ $kind != missing ]] || rvi_die "remote path does not exist: $host:$path"
+    [[ $kind == file || $kind == directory ]] || rvi_die "remote path is neither a regular file nor a directory"
+
+    if [[ $kind == directory ]]; then
+        [[ $can_read == 1 ]] || rvi_die 'protected directory browsing is intentionally unsupported; open an exact file path'
+        rvi_heading 'REMOTE BROWSE / USER'
+        rvi_field HOST "$host"
+        rvi_field SSH "$remote_user"
+        rvi_field PATH "$path"
+        rvi_field WRITE 'read-only directory view'
+        exec "$RVI_NVIM" -R "$(rvi_netrw_url "$host" "$path")"
+    fi
+
+    if [[ $read_only == 1 && $can_read == 1 ]]; then
+        rvi_heading 'REMOTE EDIT / READ ONLY'
+        rvi_field HOST "$host"
+        rvi_field SSH "$remote_user"
+        rvi_field PATH "$path"
+        exec "$RVI_NVIM" -R "$(rvi_netrw_url "$host" "$path")"
+    fi
+
+    if [[ $read_only == 0 && $can_read == 1 && $can_write == 1 ]]; then
+        rvi_heading 'REMOTE EDIT / USER'
+        rvi_field HOST "$host"
+        rvi_field SSH "$remote_user"
+        rvi_field PATH "$path"
+        rvi_field WRITE 'direct SSH'
+        exec "$RVI_NVIM" "$(rvi_netrw_url "$host" "$path")"
+    fi
+
+    [[ $sudo_ready == 1 ]] || {
+        if [[ $read_only == 1 ]]; then
+            rvi_die 'file is not readable by the SSH user and passwordless sudo is unavailable'
+        fi
+        rvi_die 'file is protected and passwordless sudo is unavailable'
+    }
+
+    original=$(mktemp -d "${TMPDIR:-/tmp}/rvi.XXXXXX")
+    rvi_tmpdir=$original
+    trap rvi_cleanup_local EXIT
+    edited=$original/edit
+    mkdir -m 700 "$edited"
+    edited=$edited/$(basename -- "$path")
+
+    if [[ $can_read == 1 ]]; then
+        read_mode=user
+        ssh "${ssh_args[@]}" "$host" "cat -- '$path'" > "$original/original"
+    else
+        read_mode=sudo
+        ssh "${ssh_args[@]}" "$host" "sudo -n cat -- '$path'" > "$original/original"
+    fi
+    cp "$original/original" "$edited"
+
+    rvi_heading 'REMOTE EDIT / PRIVILEGED'
+    rvi_field HOST "$host"
+    rvi_field SSH "$remote_user"
+    rvi_field PATH "$path"
+    rvi_field READ "$read_mode"
+    rvi_field APPLY 'sudo -n · diff + confirmation'
+
+    if [[ $read_only == 1 ]]; then
+        "$RVI_NVIM" -R "$edited"
+    else
+        "$RVI_NVIM" "$edited"
+    fi
+    if [[ $read_only == 1 ]]; then
+        return 0
+    fi
+    if cmp -s "$original/original" "$edited"; then
+        rvi_tone meta 'NO CHANGE'
+        printf '\n'
+        return 0
+    fi
+
+    printf '\n'
+    diff -u --label "$host:$path (before)" --label "$host:$path (edited)" \
+        "$original/original" "$edited" || status=$?
+    [[ ${status:-1} -eq 1 ]] || rvi_die 'could not produce a diff'
+
+    [[ -r /dev/tty && -w /dev/tty ]] || rvi_die 'an interactive terminal is required to approve privileged writes'
+    printf '\n'
+    rvi_tone coral 'APPLY REMOTE CHANGE? [y/N] '
+    IFS= read -r answer < /dev/tty
+    [[ $answer == y || $answer == Y || $answer == yes || $answer == YES ]] || {
+        rvi_tone meta 'CANCELLED'
+        printf '\n'
+        return 0
+    }
+
+    read -r crc bytes _ < <(cksum < "$original/original")
+    remote_upload=$(ssh "${ssh_args[@]}" "$host" \
+        'set -eu; umask 077; upload=$(mktemp /tmp/rvi.XXXXXX); trap '\''rm -f -- "$upload"'\'' EXIT; cat > "$upload"; printf "%s\n" "$upload"; trap - EXIT' \
+        < "$edited") || rvi_die 'could not stage the edited file on the target'
+    [[ $remote_upload == /tmp/rvi.* ]] || rvi_die 'target returned an invalid staging path'
+
+    if ! rvi_emit_apply_script | ssh "${ssh_args[@]}" "$host" \
+        "sudo -n sh -s -- '$path' '$remote_upload' '$crc' '$bytes'"; then
+        ssh "${ssh_args[@]}" "$host" "rm -f -- '$remote_upload'" >/dev/null 2>&1 || true
+        rvi_die 'remote apply failed; the original was retained or restored'
+    fi
+
+    rvi_tone teal 'APPLIED'
+    printf '  %s:%s\n' "$host" "$path"
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    rvi_main "$@"
+fi

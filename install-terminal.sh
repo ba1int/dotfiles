@@ -128,6 +128,7 @@ link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/protocol-clipboard.vim" "$nvim_dir/protocol-clipboard.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
 link_path "$repo_root/bin/zellij-help" "$HOME/.local/bin/zellij-help"
+link_path "$repo_root/bin/rvi" "$HOME/.local/bin/rvi"
 
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
@@ -165,7 +166,7 @@ if [ "$install_shell" -eq 1 ]; then
 fi
 
 missing_tools=''
-for tool_name in nvim zellij fzf rg; do
+for tool_name in nvim zellij fzf rg ssh scp; do
     if ! command -v "$tool_name" >/dev/null 2>&1; then
         missing_tools="$missing_tools $tool_name"
     fi
