@@ -7,7 +7,7 @@
       "startingDirectory": "~",
       "colorScheme": "Protocol Ink",
       "font": {
-        "face": "TX-02",
+        "face": "CommitMono",
         "size": 14,
         "weight": "normal",
         "features": {

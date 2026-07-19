@@ -3,7 +3,8 @@
 A deliberately small, portable workstation layer: terminal, shell, Neovim,
 and Zellij. The palette follows the Protocol Paper system in dark mode—deep
 ink surfaces, warm text, restrained blue structure, and coral only for active
-signals. Typography is built around TX-02.
+signals. Typography is built around the bundled Commit Mono Regular and Bold
+faces, with italic emphasis deliberately kept upright.
 
 This repository contains no agent policy, SSH automation, host inventory, or
 monitoring-lab runtime. Those live in the separate sibling `protocol-ops`
@@ -30,24 +31,23 @@ Useful installer switches:
 
 ### WSL 2 + Windows Terminal
 
-TX-02 must already be installed in Windows.
-
 ```sh
 git clone git@github.com:ba1int/dotfiles.git ~/setup
 cd ~/setup
 ./install-wsl.sh
 ```
 
-The WSL installer links the Linux-side configuration, installs the bundled
-Windows Terminal fragment through PowerShell, and selects the matching WSL
-profile by default. Use `./install-wsl.sh --no-default` to preserve the current
-Windows Terminal default profile.
+The WSL installer links the Linux-side configuration, installs Commit Mono and
+the bundled Windows Terminal fragment through PowerShell, and selects the
+matching WSL profile by default. Use `./install-wsl.sh --no-default` to preserve
+the current Windows Terminal default profile.
 
 ## What is included
 
 | Module | Files | Purpose |
 |---|---|---|
-| Ghostty | `ghostty/` | TX-02, Protocol Ink palette, platform-specific behavior |
+| Fonts | `fonts/commit-mono/` | Commit Mono Regular/Bold plus its OFL 1.1 license |
+| Ghostty | `ghostty/` | Commit Mono, Protocol Ink palette, platform-specific behavior |
 | Windows Terminal | `windows-terminal/` | Matching WSL color scheme, font, and profile fragment |
 | Shell | `shell/` | Portable Bash/Zsh prompt, `dircolors`, and semantic `man`/`less` styling |
 | Neovim | `nvim/`, `vim/` | Protocol Ink colorscheme, clipboard behavior, scrollback-safe Vim fallback |
@@ -59,13 +59,14 @@ files are timestamped and backed up before replacement.
 
 ## Dependencies
 
-- TX-02 installed on the host system
 - Neovim
 - Zellij
 - `fzf`
 - `ripgrep`
 
 Ghostty is optional on systems that use Windows Terminal or another terminal.
+The installer puts the bundled font in the current user's font directory; use
+`--no-font` when a machine should manage fonts separately.
 
 ## Local overrides
 

@@ -2,4 +2,4 @@
 window-decoration = auto
 macos-titlebar-style = hidden
 macos-titlebar-proxy-icon = hidden
-window-title-font-family = TX-02
+window-title-font-family = CommitMono

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$NoDefault
+    [switch]$NoDefault,
+    [switch]$NoFont
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,12 +12,66 @@ $fragmentSource = Join-Path $PSScriptRoot "protocol-ink.json"
 $fragmentDirectory = Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\Fragments\ProtocolInk"
 $fragmentTarget = Join-Path $fragmentDirectory "protocol-ink.json"
 
+function Install-CommitMono {
+    $fontSourceDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) "fonts\commit-mono"
+    $fontTargetDirectory = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\Fonts"
+    $fontRegistryPath = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts"
+    $fontFiles = @(
+        @{
+            File = "CommitMono-400-Regular.otf"
+            RegistryName = "CommitMono Regular (OpenType)"
+        },
+        @{
+            File = "CommitMono-700-Regular.otf"
+            RegistryName = "CommitMono Bold (OpenType)"
+        }
+    )
+
+    New-Item -ItemType Directory -Path $fontTargetDirectory -Force | Out-Null
+    New-Item -Path $fontRegistryPath -Force | Out-Null
+
+    foreach ($font in $fontFiles) {
+        $source = Join-Path $fontSourceDirectory $font.File
+        $target = Join-Path $fontTargetDirectory $font.File
+
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Bundled font not found: $source"
+        }
+
+        $copyRequired = -not (Test-Path -LiteralPath $target)
+        if (-not $copyRequired) {
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            $copyRequired = $sourceHash -ne $targetHash
+        }
+
+        if ($copyRequired) {
+            Copy-Item -LiteralPath $source -Destination $target -Force
+            Write-Host ("install {0}" -f $target)
+        }
+        else {
+            Write-Host ("ok      {0}" -f $target)
+        }
+
+        New-ItemProperty `
+            -Path $fontRegistryPath `
+            -Name $font.RegistryName `
+            -Value $target `
+            -PropertyType String `
+            -Force | Out-Null
+    }
+}
+
 if (-not (Test-Path -LiteralPath $fragmentSource)) {
     throw "Protocol Ink fragment not found: $fragmentSource"
 }
 
 # Fail before changing live settings if the repository fragment is invalid.
 Get-Content -LiteralPath $fragmentSource -Raw | ConvertFrom-Json | Out-Null
+
+if (-not $NoFont) {
+    Install-CommitMono
+}
 
 New-Item -ItemType Directory -Path $fragmentDirectory -Force | Out-Null
 Copy-Item -LiteralPath $fragmentSource -Destination $fragmentTarget -Force

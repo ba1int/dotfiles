@@ -3,10 +3,11 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 set_default=1
+install_font=1
 
 usage() {
     cat <<'EOF'
-Usage: ./install-wsl.sh [--no-default]
+Usage: ./install-wsl.sh [--no-default] [--no-font]
 
 Links the Neovim, Zellij, and portable shell modules inside WSL, installs the
 Protocol Ink fragment into Windows Terminal, and makes its WSL profile the
@@ -14,6 +15,7 @@ Windows Terminal default.
 
 Options:
   --no-default  Install the Windows Terminal profile without making it default.
+  --no-font     Do not install the bundled Commit Mono faces in Windows.
   -h, --help    Show this help.
 EOF
 }
@@ -22,6 +24,9 @@ while [ "$#" -gt 0 ]; do
     case $1 in
         --no-default)
             set_default=0
+            ;;
+        --no-font)
+            install_font=0
             ;;
         -h|--help)
             usage
@@ -41,7 +46,7 @@ if [ "$(uname -s)" != Linux ] || { [ -z "${WSL_DISTRO_NAME:-}" ] && ! grep -qi m
     exit 1
 fi
 
-"$repo_root/install-terminal.sh" --no-ghostty --with-shell
+"$repo_root/install-terminal.sh" --no-ghostty --no-font --with-shell
 
 if command -v powershell.exe >/dev/null 2>&1; then
     powershell_command=powershell.exe
@@ -54,11 +59,10 @@ else
 fi
 
 windows_script=$(wslpath -w "$repo_root/windows-terminal/install.ps1")
-if [ "$set_default" -eq 1 ]; then
-    "$powershell_command" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$windows_script"
-else
-    "$powershell_command" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$windows_script" -NoDefault
-fi
+set -- -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$windows_script"
+[ "$set_default" -eq 1 ] || set -- "$@" -NoDefault
+[ "$install_font" -eq 1 ] || set -- "$@" -NoFont
+"$powershell_command" "$@"
 
 missing_tools=''
 for tool_name in nvim zellij fzf rg; do

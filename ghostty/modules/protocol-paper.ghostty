@@ -1,11 +1,12 @@
 # Protocol Paper / clean-digital instrument mode
 
 # Typography
-font-family = TX-02
+font-family = CommitMono
 font-style = Regular
-font-style-bold = SemiBold
-font-style-italic = Oblique
-font-style-bold-italic = SemiBold Oblique
+font-style-bold = Bold
+# Keep emphasis upright: the portable font bundle intentionally omits italics.
+font-style-italic = Regular
+font-style-bold-italic = Bold
 font-size = 14.5
 font-feature = -calt,-liga,-dlig
 adjust-cell-height = 8%

@@ -6,6 +6,7 @@ config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 stamp=$(date '+%Y%m%d-%H%M%S')
 install_ghostty=1
 install_shell=1
+install_font=1
 
 usage() {
     cat <<'EOF'
@@ -13,6 +14,7 @@ Usage: ./install-terminal.sh [options]
 
 Options:
   --no-ghostty  Skip Ghostty links (used by WSL/Windows Terminal).
+  --no-font     Skip installing the bundled Commit Mono faces.
   --no-shell    Skip the portable Bash/Zsh prompt and GNU dircolors adapter.
   --with-shell  Explicitly enable the shell layer (the default).
   -h, --help    Show this help.
@@ -23,6 +25,9 @@ while [ "$#" -gt 0 ]; do
     case $1 in
         --no-ghostty)
             install_ghostty=0
+            ;;
+        --no-font)
+            install_font=0
             ;;
         --with-shell)
             install_shell=1
@@ -88,6 +93,10 @@ ensure_shell_source() {
 
 zellij_dir="$config_home/zellij"
 nvim_dir="$config_home/nvim"
+
+if [ "$install_font" -eq 1 ]; then
+    "$repo_root/fonts/install.sh"
+fi
 
 if [ "$install_ghostty" -eq 1 ]; then
     case $(uname -s) in
