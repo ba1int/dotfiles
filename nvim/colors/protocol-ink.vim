@@ -17,7 +17,7 @@ highlight FloatTitle guifg=#F3F0E7 guibg=#20211D gui=bold cterm=bold
 highlight FloatFooter guifg=#8D8F86 guibg=#20211D gui=NONE cterm=NONE
 highlight WinSeparator guifg=#44463F guibg=#171815 gui=NONE cterm=NONE
 highlight VertSplit guifg=#44463F guibg=#171815 gui=NONE cterm=NONE
-highlight Folded guifg=#8D8F86 guibg=#20211D gui=italic cterm=italic
+highlight Folded guifg=#8D8F86 guibg=#20211D gui=NONE cterm=NONE
 highlight FoldColumn guifg=#666960 guibg=#171815 gui=NONE cterm=NONE
 highlight SignColumn guifg=#8D8F86 guibg=#171815 gui=NONE cterm=NONE
 highlight ColorColumn guibg=#20211D gui=NONE cterm=NONE
@@ -44,6 +44,7 @@ highlight QuickFixLine guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 highlight qfLineNr guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight Directory guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight Underlined guifg=#78B8B3 guibg=NONE gui=underline cterm=underline
+highlight Italic guifg=NONE guibg=NONE gui=NONE cterm=NONE
 
 " Menus and ledgers
 highlight Pmenu guifg=#E8E1D2 guibg=#20211D gui=NONE cterm=NONE
@@ -96,7 +97,7 @@ highlight DiffDelete guifg=#D85B50 guibg=#31221F gui=NONE cterm=NONE
 highlight DiffText guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 
 " Syntax: hierarchy first, hue second
-highlight Comment guifg=#8D8F86 guibg=NONE gui=italic cterm=italic
+highlight Comment guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
 highlight Constant guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight String guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
 highlight Character guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
@@ -125,7 +126,7 @@ highlight Special guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight SpecialChar guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
 highlight Tag guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight Delimiter guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
-highlight SpecialComment guifg=#8D8F86 guibg=NONE gui=bold,italic cterm=bold,italic
+highlight SpecialComment guifg=#8D8F86 guibg=NONE gui=bold cterm=bold
 highlight Debug guifg=#EF5B4C guibg=NONE gui=bold cterm=bold
 highlight Todo guifg=#171815 guibg=#EF5B4C gui=bold cterm=bold
 highlight Ignore guifg=#666960 guibg=NONE gui=NONE cterm=NONE
@@ -141,12 +142,12 @@ highlight DiagnosticUnderlineError guisp=#EF5B4C gui=undercurl cterm=underline
 highlight DiagnosticUnderlineWarn guisp=#C9B76F gui=undercurl cterm=underline
 highlight DiagnosticUnderlineInfo guisp=#78B8B3 gui=undercurl cterm=underline
 highlight DiagnosticUnderlineHint guisp=#8D8F86 gui=undercurl cterm=underline
-highlight DiagnosticUnnecessary guifg=#666960 guibg=NONE gui=italic cterm=italic
+highlight DiagnosticUnnecessary guifg=#666960 guibg=NONE gui=NONE cterm=NONE
 highlight DiagnosticDeprecated guifg=#8D8F86 guibg=NONE gui=strikethrough cterm=strikethrough
 highlight LspReferenceText guibg=#292A25 gui=NONE cterm=NONE
 highlight LspReferenceRead guibg=#292A25 gui=NONE cterm=NONE
 highlight LspReferenceWrite guibg=#31504D gui=NONE cterm=NONE
-highlight LspInlayHint guifg=#666960 guibg=#20211D gui=italic cterm=italic
+highlight LspInlayHint guifg=#666960 guibg=#20211D gui=NONE cterm=NONE
 
 " Spelling marks are editorial, not atmospheric.
 highlight SpellBad guisp=#EF5B4C gui=undercurl cterm=underline
