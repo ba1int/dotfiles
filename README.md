@@ -91,9 +91,11 @@ Inside Zellij, press `Ctrl+o`, then `?` to open the themed key index. Press
 `Ctrl+o`, then `w` for the session manager.
 
 When the separate `pi-tools` package is installed, press `Ctrl+o`, then `i`
-to open Pi's live task ledger in a floating pane. The view is driven only by
-local Pi lifecycle events, adds no model context or tokens, and closes with
-`q`. It never opens automatically.
+to open Pi's live task ledger in a floating pane. One agent opens directly;
+several agents open as a selectable board. Use `↑`/`↓` to select, `Enter` to
+jump to the agent's pane, `d` for its detailed ledger, and `q` to close. The
+view is driven only by local Pi lifecycle events, adds no model context or
+tokens, and never opens automatically.
 
 The default `protocol-index` layout remains a blank indexed workspace. Start
 the optional named dispatcher desk with:

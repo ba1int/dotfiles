@@ -100,7 +100,7 @@ End the session: `Ctrl-q` quits Zellij.
 ## 08 / SESSION — Ctrl-o
 
 `?`                        this key index
-`i`                        Pi task ledger; `q` closes it
+`i`                        Pi agent board / task ledger; `q` closes it
 `w`                        session manager
 `l`                        layout manager
 `c`                        configuration
