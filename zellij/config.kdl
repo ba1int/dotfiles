@@ -134,7 +134,7 @@ keybinds clear-defaults=true {
         }
         bind "d" { Detach; }
         bind "i" {
-            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/pi-ledger\"" {
+            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/pi-ledger\" --embedded" {
                 floating true
                 close_on_exit true
                 x "8%"
