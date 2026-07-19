@@ -14,7 +14,7 @@ themes {
         }
         text_selected {
             base 243 240 231
-            background 66 107 104
+            background 49 80 77
             emphasis_0 243 240 231
             emphasis_1 232 225 210
             emphasis_2 243 240 231
@@ -29,12 +29,12 @@ themes {
             emphasis_3 169 141 160
         }
         ribbon_selected {
-            base 23 24 21
-            background 120 184 179
-            emphasis_0 23 24 21
-            emphasis_1 49 80 77
-            emphasis_2 41 42 37
-            emphasis_3 23 24 21
+            base 243 240 231
+            background 49 80 77
+            emphasis_0 243 240 231
+            emphasis_1 232 225 210
+            emphasis_2 170 168 159
+            emphasis_3 243 240 231
         }
         table_title {
             base 120 184 179
@@ -54,7 +54,7 @@ themes {
         }
         table_cell_selected {
             base 243 240 231
-            background 66 107 104
+            background 49 80 77
             emphasis_0 243 240 231
             emphasis_1 232 225 210
             emphasis_2 243 240 231
@@ -70,7 +70,7 @@ themes {
         }
         list_selected {
             base 243 240 231
-            background 66 107 104
+            background 49 80 77
             emphasis_0 243 240 231
             emphasis_1 232 225 210
             emphasis_2 243 240 231

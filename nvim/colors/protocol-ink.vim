@@ -47,24 +47,24 @@ highlight Underlined guifg=#78B8B3 guibg=NONE gui=underline cterm=underline
 
 " Menus and ledgers
 highlight Pmenu guifg=#E8E1D2 guibg=#20211D gui=NONE cterm=NONE
-highlight PmenuSel guifg=#171815 guibg=#E8E1D2 gui=bold cterm=bold
+highlight PmenuSel guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 highlight PmenuKind guifg=#8D8F86 guibg=#20211D gui=NONE cterm=NONE
-highlight PmenuKindSel guifg=#171815 guibg=#E8E1D2 gui=bold cterm=bold
+highlight PmenuKindSel guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 highlight PmenuExtra guifg=#8D8F86 guibg=#20211D gui=NONE cterm=NONE
-highlight PmenuExtraSel guifg=#44463F guibg=#E8E1D2 gui=NONE cterm=NONE
+highlight PmenuExtraSel guifg=#E8E1D2 guibg=#31504D gui=NONE cterm=NONE
 highlight PmenuMatch guifg=#78B8B3 guibg=#20211D gui=bold cterm=bold
-highlight PmenuMatchSel guifg=#171815 guibg=#E8E1D2 gui=bold cterm=bold
+highlight PmenuMatchSel guifg=#F3F0E7 guibg=#31504D gui=bold,underline cterm=bold,underline
 highlight PmenuBorder guifg=#44463F guibg=#20211D gui=NONE cterm=NONE
 highlight PmenuSbar guibg=#292A25 gui=NONE cterm=NONE
 highlight PmenuThumb guibg=#666960 gui=NONE cterm=NONE
-highlight WildMenu guifg=#171815 guibg=#E8E1D2 gui=bold cterm=bold
+highlight WildMenu guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 
 " Status and classification strips
 highlight StatusLine guifg=#E8E1D2 guibg=#20211D gui=NONE cterm=NONE
 highlight StatusLineNC guifg=#666960 guibg=#171815 gui=NONE cterm=NONE
 highlight TabLine guifg=#8D8F86 guibg=#171815 gui=NONE cterm=NONE
 highlight TabLineFill guifg=#44463F guibg=#171815 gui=NONE cterm=NONE
-highlight TabLineSel guifg=#171815 guibg=#E8E1D2 gui=bold cterm=bold
+highlight TabLineSel guifg=#F3F0E7 guibg=#31504D gui=bold cterm=bold
 highlight WinBar guifg=#E8E1D2 guibg=#171815 gui=bold cterm=bold
 highlight WinBarNC guifg=#666960 guibg=#171815 gui=NONE cterm=NONE
 highlight ProtocolFolio guifg=#171815 guibg=#EF5B4C gui=bold cterm=bold
@@ -100,9 +100,9 @@ highlight Comment guifg=#8D8F86 guibg=NONE gui=italic cterm=italic
 highlight Constant guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight String guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
 highlight Character guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
-highlight Number guifg=#C9B76F guibg=NONE gui=NONE cterm=NONE
-highlight Boolean guifg=#C9B76F guibg=NONE gui=bold cterm=bold
-highlight Float guifg=#C9B76F guibg=NONE gui=NONE cterm=NONE
+highlight Number guifg=#C8C5BB guibg=NONE gui=NONE cterm=NONE
+highlight Boolean guifg=#C8C5BB guibg=NONE gui=bold cterm=bold
+highlight Float guifg=#C8C5BB guibg=NONE gui=NONE cterm=NONE
 highlight Identifier guifg=#E8E1D2 guibg=NONE gui=NONE cterm=NONE
 highlight Function guifg=#F3F0E7 guibg=NONE gui=bold cterm=bold
 highlight Statement guifg=#AAA89F guibg=NONE gui=bold cterm=bold
@@ -112,17 +112,17 @@ highlight Label guifg=#AAA89F guibg=NONE gui=bold cterm=bold
 highlight Operator guifg=#C8C5BB guibg=NONE gui=NONE cterm=NONE
 highlight Keyword guifg=#AAA89F guibg=NONE gui=bold cterm=bold
 highlight Exception guifg=#D85B50 guibg=NONE gui=bold cterm=bold
-highlight PreProc guifg=#7E9EAE guibg=NONE gui=NONE cterm=NONE
-highlight Include guifg=#7E9EAE guibg=NONE gui=bold cterm=bold
-highlight Define guifg=#7E9EAE guibg=NONE gui=NONE cterm=NONE
-highlight Macro guifg=#7E9EAE guibg=NONE gui=NONE cterm=NONE
-highlight PreCondit guifg=#7E9EAE guibg=NONE gui=NONE cterm=NONE
+highlight PreProc guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
+highlight Include guifg=#AAA89F guibg=NONE gui=bold cterm=bold
+highlight Define guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
+highlight Macro guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
+highlight PreCondit guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
 highlight Type guifg=#C8C5BB guibg=NONE gui=bold cterm=bold
 highlight StorageClass guifg=#C8C5BB guibg=NONE gui=bold cterm=bold
 highlight Structure guifg=#C8C5BB guibg=NONE gui=bold cterm=bold
 highlight Typedef guifg=#C8C5BB guibg=NONE gui=bold cterm=bold
-highlight Special guifg=#A98DA0 guibg=NONE gui=NONE cterm=NONE
-highlight SpecialChar guifg=#A98DA0 guibg=NONE gui=NONE cterm=NONE
+highlight Special guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
+highlight SpecialChar guifg=#9ACEC9 guibg=NONE gui=NONE cterm=NONE
 highlight Tag guifg=#78B8B3 guibg=NONE gui=NONE cterm=NONE
 highlight Delimiter guifg=#8D8F86 guibg=NONE gui=NONE cterm=NONE
 highlight SpecialComment guifg=#8D8F86 guibg=NONE gui=bold,italic cterm=bold,italic

@@ -49,7 +49,7 @@ Windows Terminal default profile.
 |---|---|---|
 | Ghostty | `ghostty/` | TX-02, Protocol Ink palette, platform-specific behavior |
 | Windows Terminal | `windows-terminal/` | Matching WSL color scheme, font, and profile fragment |
-| Shell | `shell/` | Portable Bash/Zsh prompt and GNU `dircolors` palette |
+| Shell | `shell/` | Portable Bash/Zsh prompt, `dircolors`, and semantic `man`/`less` styling |
 | Neovim | `nvim/`, `vim/` | Protocol Ink colorscheme, clipboard behavior, scrollback-safe Vim fallback |
 | Zellij | `zellij/`, `bin/zellij-help` | Theme, indexed tab bar, layout, key index, and visible selection states |
 
@@ -81,10 +81,24 @@ does not leak into the shared workstation configuration.
 Set `PROTOCOL_INK_PROMPT=0` before sourcing the shell adapter if you want the
 palette and PATH behavior without its prompt.
 
+Set `PROTOCOL_INK_PAGER=0` to leave `man` and `less` styling untouched. The
+pager module colors only semantic emphasis, underlines, and standout/search
+records; it does not guess at or recolor arbitrary log content.
+
 ## Zellij key index
 
 Inside Zellij, press `Ctrl+o`, then `?` to open the themed key index. Press
 `Ctrl+o`, then `w` for the session manager.
+
+The default `protocol-index` layout remains a blank indexed workspace. Start
+the optional named dispatcher desk with:
+
+```sh
+zellij --layout protocol-ops
+```
+
+It opens `01 / DISPATCH` on the left and stacks `02 / SHELL` above
+`03 / WATCH` on the right without adding another status bar or plugin.
 
 ## Verify
 
