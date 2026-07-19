@@ -37,6 +37,36 @@ filtered_search=$(printf '%s\n' "$search_results" | rvi_filter_search)
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/rvi-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
+export XDG_STATE_HOME="$scratch/state"
+rvi_recent_record lab-test /etc/one.conf
+rvi_recent_record lab-test /etc/two.conf
+rvi_recent_record lab-test /etc/one.conf
+recent_file=$(rvi_recent_file lab-test)
+assert_equal "$(sed -n '1p' "$recent_file")" '/etc/one.conf'
+assert_equal "$(wc -l < "$recent_file" | tr -d ' ')" '2'
+recent_mode=$(stat -c '%a' "$recent_file" 2>/dev/null || stat -f '%Lp' "$recent_file")
+assert_equal "$recent_mode" '600'
+ssh() {
+    printf '/etc/one.conf\n/etc/two.conf\n'
+}
+rvi_recent_load lab-test
+unset -f ssh
+[[ $rvi_recent_rows == FAST$'\t\t\t\t\t/etc/one.conf'* ]] \
+    || fail 'FAST row was not rendered as a clean path-only record'
+ssh() {
+    printf '/etc/one.conf\n'
+}
+rvi_recent_load lab-test
+unset -f ssh
+assert_equal "$(wc -l < "$recent_file" | tr -d ' ')" '1'
+assert_equal "$(sed -n '1p' "$recent_file")" '/etc/one.conf'
+for number in 1 2 3 4 5 6 7; do
+    rvi_recent_record lab-limit "/etc/item-$number.conf"
+done
+limit_file=$(rvi_recent_file lab-limit)
+assert_equal "$(wc -l < "$limit_file" | tr -d ' ')" "$RVI_RECENT_LIMIT"
+assert_equal "$(sed -n '1p' "$limit_file")" '/etc/item-7.conf'
+
 target=$scratch/target.conf
 link=$scratch/link.conf
 upload=$scratch/upload

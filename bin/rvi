@@ -2,10 +2,12 @@
 set -Eeuo pipefail
 
 readonly RVI_NVIM="${RVI_NVIM:-nvim}"
+readonly RVI_RECENT_LIMIT=6
 rvi_tmpdir=
 rvi_browse_result=
 rvi_search_result=
 rvi_search_type=
+rvi_recent_rows=
 
 RVI_SSH_ARGS=(
     -T
@@ -69,6 +71,89 @@ rvi_list_hosts() {
         find "$HOME/.ssh" -maxdepth 3 -type f \
             \( -name config -o -name '*.conf' \) -print 2>/dev/null
     ) | LC_ALL=C sort -u
+}
+
+rvi_recent_file() {
+    printf '%s/rvi/hosts/%s.recent' \
+        "${XDG_STATE_HOME:-$HOME/.local/state}" "$1"
+}
+
+rvi_recent_write() {
+    local host=$1 content=${2:-} file directory temporary old_umask
+    file=$(rvi_recent_file "$host")
+    directory=$(dirname -- "$file")
+
+    if [[ -z $content ]]; then
+        rm -f -- "$file"
+        return 0
+    fi
+
+    mkdir -p -- "$directory"
+    chmod 700 "$(dirname -- "$directory")" "$directory"
+    old_umask=$(umask)
+    umask 077
+    temporary=$(mktemp "$directory/.recent.XXXXXX")
+    printf '%s\n' "$content" > "$temporary"
+    chmod 600 "$temporary"
+    mv -f -- "$temporary" "$file"
+    umask "$old_umask"
+}
+
+rvi_recent_record() {
+    local host=$1 path=$2 file candidate content count=1
+    local -a entries
+    rvi_validate_host "$host" || return 0
+    rvi_validate_path "$path" || return 0
+    entries=("$path")
+    file=$(rvi_recent_file "$host")
+
+    if [[ -r $file ]]; then
+        while IFS= read -r candidate; do
+            [[ $candidate != "$path" ]] || continue
+            rvi_validate_path "$candidate" || continue
+            entries+=("$candidate")
+            (( count += 1 ))
+            (( count >= RVI_RECENT_LIMIT )) && break
+        done < "$file"
+    fi
+
+    content=$(printf '%s\n' "${entries[@]}")
+    rvi_recent_write "$host" "$content"
+}
+
+rvi_recent_load() {
+    local host=$1 file path valid current rows= row
+    local -a paths=()
+    rvi_recent_rows=
+    file=$(rvi_recent_file "$host")
+    [[ -r $file ]] || return 0
+
+    while IFS= read -r path; do
+        rvi_validate_path "$path" || continue
+        paths+=("$path")
+        (( ${#paths[@]} >= RVI_RECENT_LIMIT )) && break
+    done < "$file"
+    (( ${#paths[@]} > 0 )) || { rvi_recent_write "$host" ''; return 0; }
+
+    valid=$(ssh "${RVI_SSH_ARGS[@]}" "$host" sh -s -- "${paths[@]}" <<'REMOTE_RECENT'
+sudo_ready=0
+sudo -n true >/dev/null 2>&1 && sudo_ready=1
+for path do
+    if [ -f "$path" ] || { [ "$sudo_ready" -eq 1 ] && sudo -n test -f "$path"; }; then
+        printf '%s\n' "$path"
+    fi
+done
+REMOTE_RECENT
+    ) || return 0
+
+    current=$(printf '%s\n' "${paths[@]}")
+    [[ $valid == "$current" ]] || rvi_recent_write "$host" "$valid"
+    [[ -n $valid ]] || return 0
+    while IFS= read -r path; do
+        printf -v row 'FAST\t\t\t\t\t%s' "$path"
+        rows+="$row"$'\n'
+    done <<< "$valid"
+    rvi_recent_rows=${rows%$'\n'}
 }
 
 rvi_remote_list() {
@@ -174,7 +259,7 @@ rvi_search() {
 }
 
 rvi_browse() {
-    local host=$1 directory=${2:-/} raw listing output key selection type mode owner size modified name
+    local host=$1 directory=${2:-/} raw listing output key selection type mode owner size modified name fast_hint=
     command -v fzf >/dev/null 2>&1 || rvi_die 'fzf is required for remote browsing'
     [[ -t 0 && -t 1 ]] || rvi_die 'remote browsing needs an interactive terminal'
     [[ $directory == / ]] || directory=${directory%/}
@@ -183,6 +268,14 @@ rvi_browse() {
         raw=$(rvi_remote_list "$host" "$directory") \
             || rvi_die "could not list $host:$directory"
         listing=$(printf '%s\n' "$raw" | rvi_filter_listing)
+        fast_hint=
+        if [[ $directory == / ]]; then
+            rvi_recent_load "$host"
+            if [[ -n $rvi_recent_rows ]]; then
+                listing=$(printf '%s\n%s' "$rvi_recent_rows" "$listing")
+                fast_hint='fast access  ·  '
+            fi
+        fi
         if [[ $directory != / ]]; then
             listing=$(printf 'DIR\t----\t-\t-\t-\t..\n%s' "$listing")
         fi
@@ -192,7 +285,7 @@ rvi_browse() {
             --delimiter=$'\t' --with-nth=1,2,3,5,6 \
             --expect=ctrl-f \
             --prompt='REMOTE FS  ' \
-            --header="RVI / $host:$directory  ·  type filter  ·  ctrl-f recursive  ·  enter open  ·  esc close" \
+            --header="RVI / $host:$directory  ·  ${fast_hint}type filter  ·  ctrl-f recursive  ·  enter open  ·  esc close" \
             --color='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780' \
         ) || return 1
 
@@ -214,6 +307,11 @@ rvi_browse() {
                 fi
             fi
             continue
+        fi
+
+        if [[ $selection == FAST$'\t'* ]]; then
+            rvi_browse_result=${selection##*$'\t'}
+            return 0
         fi
 
         IFS=$'\t' read -r type mode owner size modified name <<< "$selection"
@@ -443,7 +541,12 @@ REMOTE_PROBE
         rvi_field HOST "$host"
         rvi_field SSH "$remote_user"
         rvi_field PATH "$path"
-        exec "$RVI_NVIM" -R "$(rvi_netrw_url "$host" "$path")"
+        if "$RVI_NVIM" -R "$(rvi_netrw_url "$host" "$path")"; then
+            rvi_recent_record "$host" "$path"
+            return 0
+        else
+            return $?
+        fi
     fi
 
     if [[ $read_only == 0 && $can_read == 1 && $can_write == 1 ]]; then
@@ -452,7 +555,12 @@ REMOTE_PROBE
         rvi_field SSH "$remote_user"
         rvi_field PATH "$path"
         rvi_field WRITE 'direct SSH'
-        exec "$RVI_NVIM" "$(rvi_netrw_url "$host" "$path")"
+        if "$RVI_NVIM" "$(rvi_netrw_url "$host" "$path")"; then
+            rvi_recent_record "$host" "$path"
+            return 0
+        else
+            return $?
+        fi
     fi
 
     [[ $sudo_ready == 1 ]] || {
@@ -486,12 +594,16 @@ REMOTE_PROBE
     rvi_field APPLY 'sudo -n · diff + confirmation'
 
     if [[ $read_only == 1 ]]; then
-        "$RVI_NVIM" -R "$edited"
+        if "$RVI_NVIM" -R "$edited"; then
+            rvi_recent_record "$host" "$path"
+            return 0
+        else
+            return $?
+        fi
+    elif "$RVI_NVIM" "$edited"; then
+        rvi_recent_record "$host" "$path"
     else
-        "$RVI_NVIM" "$edited"
-    fi
-    if [[ $read_only == 1 ]]; then
-        return 0
+        return $?
     fi
     if cmp -s "$original/original" "$edited"; then
         rvi_tone meta 'NO CHANGE'

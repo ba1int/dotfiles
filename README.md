@@ -134,6 +134,12 @@ filename search rooted at that directory; from `/`, this searches the remote
 system while skipping the virtual `/proc`, `/sys`, and `/dev` trees. `Esc`
 returns from search to the directory view.
 
+The root view also keeps a local six-file `FAST` index for each SSH host. A file
+enters the index after Neovim opens it successfully; reopening it moves it to
+the top. Entries are validated against the host and stale paths disappear
+quietly. This private history lives under `${XDG_STATE_HOME:-~/.local/state}/rvi`
+with mode `0600`; it is not stored in dotfiles or copied to remote systems.
+
 Files writable by the SSH user use Neovim's native SSH transport. Protected
 files are downloaded into a private local directory and opened with the same
 local theme and plugins. On exit, `rvi` shows the exact diff and asks before it
