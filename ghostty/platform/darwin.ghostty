@@ -1,4 +1,17 @@
 # Native frame with the titlebar hidden for a cleaner fullscreen view.
+# Send Option-key chords as terminal Alt/Meta sequences for Zellij and shells.
+macos-option-as-alt = true
+# Ghostty maps Option-Left/Right to Esc-b/f by default (shell word motion).
+# Emit standard Alt-arrow CSI sequences so terminal multiplexers see arrows.
+keybind = alt+arrow_left=csi:1;3D
+keybind = alt+arrow_down=csi:1;3B
+keybind = alt+arrow_up=csi:1;3A
+keybind = alt+arrow_right=csi:1;3C
+
+# Keep one physical mouse-wheel step discrete inside mouse-aware TUIs and
+# multiplexers. Ghostty's macOS default is 3, which compounds with Mos smoothing.
+mouse-scroll-multiplier = precision:1,discrete:1
+
 window-decoration = auto
 macos-titlebar-style = hidden
 macos-titlebar-proxy-icon = hidden
