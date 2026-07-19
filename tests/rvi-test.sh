@@ -18,6 +18,7 @@ rvi_validate_host 'operator@app01.example.net' || fail 'valid user@host rejected
 ! rvi_validate_host 'root@app;evil' || fail 'unsafe host accepted'
 rvi_validate_path '/etc/icinga2/zones.d/dc1/hosts.conf' || fail 'valid path rejected'
 rvi_validate_path '/' || fail 'filesystem root rejected'
+rvi_validate_path '/etc/' || fail 'trailing-slash directory rejected'
 ! rvi_validate_path '../etc/shadow' || fail 'relative path accepted'
 ! rvi_validate_path '/etc/a path' || fail 'space-containing path accepted'
 ! rvi_validate_path '/etc//shadow' || fail 'double-slash path accepted'
@@ -28,6 +29,11 @@ filtered=$(printf '%s\n' "$listing" | rvi_filter_listing)
 [[ $filtered == *$'\t'icinga2* ]] || fail 'valid directory missing from filtered listing'
 [[ $filtered == *$'\t'hosts* ]] || fail 'valid file missing from filtered listing'
 [[ $filtered != *'a bad name'* ]] || fail 'unsafe remote name accepted'
+
+search_results=$'f\t0644\toperator:operator\t20\t2026-07-19 12:00\t/home/operator/.bashrc\nf\t0644\toperator:operator\t20\t2026-07-19 12:00\t/home/operator/a bad name'
+filtered_search=$(printf '%s\n' "$search_results" | rvi_filter_search)
+[[ $filtered_search == *'/home/operator/.bashrc'* ]] || fail 'valid recursive result missing'
+[[ $filtered_search != *'a bad name'* ]] || fail 'unsafe recursive result accepted'
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/rvi-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT

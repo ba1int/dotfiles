@@ -1,4 +1,5 @@
 let g:protocol_ink_nvim = 1
+let g:netrw_silent = 1
 
 let s:protocol_nvim_dir = fnamemodify(resolve(expand('<sfile>:p')), ':h')
 let s:protocol_clipboard = s:protocol_nvim_dir . '/protocol-clipboard.vim'

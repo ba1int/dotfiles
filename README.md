@@ -129,6 +129,11 @@ completion when its completion system is initialized—covers SSH aliases and
 remote paths. Remote path completion likewise performs one directory listing
 when requested.
 
+Typing filters the directory currently on screen. Press `Ctrl+F` for recursive
+filename search rooted at that directory; from `/`, this searches the remote
+system while skipping the virtual `/proc`, `/sys`, and `/dev` trees. `Esc`
+returns from search to the directory view.
+
 Files writable by the SSH user use Neovim's native SSH transport. Protected
 files are downloaded into a private local directory and opened with the same
 local theme and plugins. On exit, `rvi` shows the exact diff and asks before it
