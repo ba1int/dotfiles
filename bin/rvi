@@ -405,12 +405,20 @@ rvi_main() {
     probe=$(ssh "${RVI_SSH_ARGS[@]}" "$host" sh -s -- "$path" <<'REMOTE_PROBE'
 set -eu
 path=$1
-[ -e "$path" ] || { printf 'missing|0|0|0|%s\n' "$(id -un)"; exit 0; }
-if [ -d "$path" ]; then kind=directory; elif [ -f "$path" ]; then kind=file; else kind=other; fi
 readable=0; writable=0; sudo_ready=0
 [ -r "$path" ] && readable=1
 [ -w "$path" ] && writable=1
 sudo -n true >/dev/null 2>&1 && sudo_ready=1
+
+if [ -e "$path" ]; then
+    if [ -d "$path" ]; then kind=directory; elif [ -f "$path" ]; then kind=file; else kind=other; fi
+elif [ "$sudo_ready" -eq 1 ] && sudo -n test -e "$path"; then
+    if sudo -n test -d "$path"; then kind=directory; elif sudo -n test -f "$path"; then kind=file; else kind=other; fi
+else
+    printf 'missing|0|0|%s|%s\n' "$sudo_ready" "$(id -un)"
+    exit 0
+fi
+
 printf '%s|%s|%s|%s|%s\n' "$kind" "$readable" "$writable" "$sudo_ready" "$(id -un)"
 REMOTE_PROBE
     ) || rvi_die "could not inspect $host:$path"
