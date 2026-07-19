@@ -129,6 +129,12 @@ completion when its completion system is initialized—covers SSH aliases and
 remote paths. Remote path completion likewise performs one directory listing
 when requested.
 
+After `rvi` successfully reaches a concrete SSH destination, it remembers that
+name locally and places it above configured aliases in the host picker. This
+makes hosts reached through wildcard SSH stanzas discoverable on the next use
+without querying a CMDB or scanning the network. The list is private,
+newest-first, deduplicated, and capped at 256 destinations.
+
 Typing filters the directory currently on screen. Press `Ctrl+F` for recursive
 filename search rooted at that directory; from `/`, this searches the remote
 system while skipping the virtual `/proc`, `/sys`, and `/dev` trees. `Esc`

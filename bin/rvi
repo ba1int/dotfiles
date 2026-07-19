@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 readonly RVI_NVIM="${RVI_NVIM:-nvim}"
 readonly RVI_RECENT_LIMIT=6
+readonly RVI_HOST_LIMIT=256
 rvi_tmpdir=
 rvi_browse_result=
 rvi_search_result=
@@ -57,7 +58,69 @@ rvi_netrw_url() {
     printf 'scp://%s//%s' "$1" "${2#/}"
 }
 
-rvi_list_hosts() {
+rvi_state_dir() {
+    printf '%s/rvi' "${XDG_STATE_HOME:-$HOME/.local/state}"
+}
+
+rvi_state_write() {
+    local file=$1 content=${2:-} label=${3:-state} directory temporary old_umask
+    directory=$(dirname -- "$file")
+
+    if [[ -z $content ]]; then
+        rm -f -- "$file"
+        return 0
+    fi
+
+    mkdir -p -- "$directory"
+    chmod 700 "$(rvi_state_dir)" "$directory"
+    old_umask=$(umask)
+    umask 077
+    temporary=$(mktemp "$directory/.${label}.XXXXXX")
+    printf '%s\n' "$content" > "$temporary"
+    chmod 600 "$temporary"
+    mv -f -- "$temporary" "$file"
+    umask "$old_umask"
+}
+
+rvi_known_hosts_file() {
+    printf '%s/known-hosts' "$(rvi_state_dir)"
+}
+
+rvi_known_hosts_load() {
+    local file host count=0
+    file=$(rvi_known_hosts_file)
+    [[ -r $file ]] || return 0
+
+    while IFS= read -r host; do
+        rvi_validate_host "$host" || continue
+        printf '%s\n' "$host"
+        (( count += 1 ))
+        (( count >= RVI_HOST_LIMIT )) && break
+    done < "$file"
+}
+
+rvi_host_record() {
+    local host=$1 file candidate content count=1
+    local -a entries
+    rvi_validate_host "$host" || return 0
+    entries=("$host")
+    file=$(rvi_known_hosts_file)
+
+    if [[ -r $file ]]; then
+        while IFS= read -r candidate; do
+            [[ $candidate != "$host" ]] || continue
+            rvi_validate_host "$candidate" || continue
+            entries+=("$candidate")
+            (( count += 1 ))
+            (( count >= RVI_HOST_LIMIT )) && break
+        done < "$file"
+    fi
+
+    content=$(printf '%s\n' "${entries[@]}")
+    rvi_state_write "$file" "$content" hosts
+}
+
+rvi_config_hosts() {
     local file
     while IFS= read -r file; do
         awk '
@@ -73,30 +136,21 @@ rvi_list_hosts() {
     ) | LC_ALL=C sort -u
 }
 
+rvi_list_hosts() {
+    {
+        rvi_known_hosts_load
+        rvi_config_hosts
+    } | awk 'NF && !seen[$0]++'
+}
+
 rvi_recent_file() {
-    printf '%s/rvi/hosts/%s.recent' \
-        "${XDG_STATE_HOME:-$HOME/.local/state}" "$1"
+    printf '%s/hosts/%s.recent' "$(rvi_state_dir)" "$1"
 }
 
 rvi_recent_write() {
-    local host=$1 content=${2:-} file directory temporary old_umask
+    local host=$1 content=${2:-} file
     file=$(rvi_recent_file "$host")
-    directory=$(dirname -- "$file")
-
-    if [[ -z $content ]]; then
-        rm -f -- "$file"
-        return 0
-    fi
-
-    mkdir -p -- "$directory"
-    chmod 700 "$(dirname -- "$directory")" "$directory"
-    old_umask=$(umask)
-    umask 077
-    temporary=$(mktemp "$directory/.recent.XXXXXX")
-    printf '%s\n' "$content" > "$temporary"
-    chmod 600 "$temporary"
-    mv -f -- "$temporary" "$file"
-    umask "$old_umask"
+    rvi_state_write "$file" "$content" recent
 }
 
 rvi_recent_record() {
@@ -521,6 +575,7 @@ printf '%s|%s|%s|%s|%s\n' "$kind" "$readable" "$writable" "$sudo_ready" "$(id -u
 REMOTE_PROBE
     ) || rvi_die "could not inspect $host:$path"
 
+    rvi_host_record "$host"
     IFS='|' read -r kind can_read can_write sudo_ready remote_user <<< "$probe"
     [[ $kind != missing ]] || rvi_die "remote path does not exist: $host:$path (use 'rvi $host' to browse)"
     [[ $kind == file || $kind == directory ]] || rvi_die "remote path is neither a regular file nor a directory"

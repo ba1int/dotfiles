@@ -38,6 +38,22 @@ filtered_search=$(printf '%s\n' "$search_results" | rvi_filter_search)
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/rvi-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 export XDG_STATE_HOME="$scratch/state"
+rvi_host_record app01
+rvi_host_record app02
+rvi_host_record app01
+known_hosts_file=$(rvi_known_hosts_file)
+assert_equal "$(sed -n '1p' "$known_hosts_file")" 'app01'
+assert_equal "$(sed -n '2p' "$known_hosts_file")" 'app02'
+known_hosts_mode=$(stat -c '%a' "$known_hosts_file" 2>/dev/null || stat -f '%Lp' "$known_hosts_file")
+assert_equal "$known_hosts_mode" '600'
+rvi_host_record 'host-*'
+assert_equal "$(wc -l < "$known_hosts_file" | tr -d ' ')" '2'
+
+mkdir -p "$scratch/home/.ssh"
+printf 'Host app02 configured-only host-*\n' > "$scratch/home/.ssh/config"
+HOME="$scratch/home" merged_hosts=$(rvi_list_hosts)
+assert_equal "$merged_hosts" $'app01\napp02\nconfigured-only'
+
 rvi_recent_record lab-test /etc/one.conf
 rvi_recent_record lab-test /etc/two.conf
 rvi_recent_record lab-test /etc/one.conf
