@@ -18,8 +18,12 @@ execute 'source ' . fnameescape(s:shared_vimrc)
 " Protocol Paper / technical-dense instrument mode.
 set background=dark
 set laststatus=3
-set winborder=single
-set pumborder=single
+if exists('+winborder')
+  set winborder=single
+endif
+if exists('+pumborder')
+  set pumborder=single
+endif
 set pumblend=0
 set winblend=0
 set cursorlineopt=number,line

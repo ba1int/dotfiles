@@ -34,13 +34,17 @@ Useful installer switches:
 ```sh
 git clone git@github.com:ba1int/dotfiles.git ~/setup
 cd ~/setup
-./install-wsl.sh
+./install-workstation.sh
 ```
 
-The WSL installer links the Linux-side configuration, installs Commit Mono and
-the bundled Windows Terminal fragment through PowerShell, and selects the
-matching WSL profile by default. Use `./install-wsl.sh --no-default` to preserve
-the current Windows Terminal default profile.
+The one-shot bootstrap installs the small Ubuntu package set, pinned user-local
+Node and Zellij builds, the Linux-side configuration, Commit Mono, the Windows
+Terminal profile, Pi, and the separate repository-owned `pi-tools` package.
+After it finishes, restart Windows Terminal and complete Pi's `/login`; work
+skills and credentials remain machine-local. Use
+`./install-workstation.sh --no-default` to preserve the current terminal
+default, or use `./install-wsl.sh` when dependencies and Pi are managed
+separately.
 
 ## What is included
 
@@ -171,3 +175,13 @@ readlink ~/.local/bin/rvi
 On macOS, Ghostty's configuration lives under
 `~/Library/Application Support/com.mitchellh.ghostty/`; on Linux it lives under
 `${XDG_CONFIG_HOME:-~/.config}/ghostty/`.
+
+The disposable Ubuntu 24.04 clean-install test uses no model credentials and
+makes no model calls. With Docker running and a sibling `pi-tools` checkout:
+
+```sh
+PI_TOOLS_DIR=~/pi-tools ./tests/workstation/run.sh
+```
+
+It defaults to `linux/amd64`, matching ordinary WSL workstations. Set
+`WORKSTATION_SMOKE_PLATFORM=linux/arm64` only for an ARM Windows target.

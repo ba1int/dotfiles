@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+mkdir -p "$HOME/.cache"
+printf '%s\n' "$@" > "$HOME/.cache/protocol-ink-powershell-argv"
