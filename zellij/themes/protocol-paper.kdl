@@ -1,0 +1,132 @@
+// Protocol Paper / Zellij component theme
+// Warm rules organize the page; ink and teal carry persistent focus.
+// Red is reserved for errors and exceptional states.
+
+themes {
+    protocol-paper {
+        text_unselected {
+            base 25 26 23
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 70 118 83
+            emphasis_3 25 26 23
+        }
+        text_selected {
+            base 25 26 23
+            background 200 218 213
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 25 26 23
+            emphasis_3 25 26 23
+        }
+        ribbon_unselected {
+            base 85 88 80
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 237 234 225
+            emphasis_2 71 110 127
+            emphasis_3 112 86 104
+        }
+        ribbon_selected {
+            base 25 26 23
+            background 200 218 213
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 85 88 80
+            emphasis_3 25 26 23
+        }
+        table_title {
+            base 53 111 107
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 71 110 127
+            emphasis_2 70 118 83
+            emphasis_3 112 86 104
+        }
+        table_cell_unselected {
+            base 25 26 23
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 70 118 83
+            emphasis_3 112 86 104
+        }
+        table_cell_selected {
+            base 25 26 23
+            background 200 218 213
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 25 26 23
+            emphasis_3 25 26 23
+        }
+        list_unselected {
+            base 25 26 23
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 70 118 83
+            emphasis_3 112 86 104
+        }
+        list_selected {
+            base 25 26 23
+            background 200 218 213
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 25 26 23
+            emphasis_3 25 26 23
+        }
+        frame_unselected {
+            base 166 164 155
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 53 111 107
+            emphasis_2 70 118 83
+            emphasis_3 112 86 104
+        }
+        frame_selected {
+            base 87 127 122
+            background 237 234 225
+            emphasis_0 25 26 23
+            emphasis_1 71 110 127
+            emphasis_2 112 86 104
+            emphasis_3 85 88 80
+        }
+        frame_highlight {
+            base 25 26 23
+            background 237 234 225
+            emphasis_0 112 86 104
+            emphasis_1 53 111 107
+            emphasis_2 25 26 23
+            emphasis_3 25 26 23
+        }
+        exit_code_success {
+            base 70 118 83
+            background 237 234 225
+            emphasis_0 53 111 107
+            emphasis_1 237 234 225
+            emphasis_2 112 86 104
+            emphasis_3 71 110 127
+        }
+        exit_code_error {
+            base 182 64 52
+            background 237 234 225
+            emphasis_0 121 102 31
+            emphasis_1 237 234 225
+            emphasis_2 237 234 225
+            emphasis_3 237 234 225
+        }
+        multiplayer_user_colors {
+            player_1 118 88 108
+            player_2 66 111 130
+            player_3 95 97 91
+            player_4 128 107 32
+            player_5 51 119 115
+            player_6 182 92 67
+            player_7 182 64 52
+            player_8 23 24 21
+            player_9 140 109 131
+            player_10 86 76 62
+        }
+    }
+}

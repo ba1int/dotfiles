@@ -1,10 +1,11 @@
 # Protocol Ink workstation
 
 A deliberately small, portable workstation layer: terminal, shell, Neovim,
-and Zellij. The palette follows the Protocol Paper system in dark mode—deep
-ink surfaces, warm text, restrained blue structure, and coral only for active
-signals. Typography is built around the bundled Commit Mono Regular and Bold
-faces, with italic emphasis deliberately kept upright.
+and Zellij. Ghostty and Zellij follow the host appearance with paired Protocol
+Ink and Protocol Paper palettes—deep ink after dark, warm paper during the day,
+structural teal, and coral only for errors or exceptional signals. Typography
+is built around the bundled Commit Mono Regular and Bold faces, with italic
+emphasis kept upright.
 
 This repository contains no agent policy, SSH automation, host inventory, or
 monitoring-lab runtime. Those live in the separate sibling `protocol-ops`
@@ -21,6 +22,10 @@ cd ~/Documents/setup
 ```
 
 Reload Ghostty, start a new shell, and create a new Zellij session.
+The prompt keeps an existing Zellij session aligned with macOS appearance on
+the next prompt render; the Pi module provides continuous sync while Pi is open.
+To refresh the shell layer in place, source it rather than executing it:
+`. ~/.config/protocol-ink/shell.sh`. It never requires `sudo`.
 
 Useful installer switches:
 
@@ -51,11 +56,11 @@ separately.
 | Module | Files | Purpose |
 |---|---|---|
 | Fonts | `fonts/commit-mono/` | Commit Mono Regular/Bold plus its OFL 1.1 license |
-| Ghostty | `ghostty/` | Commit Mono, Protocol Ink palette, platform-specific behavior |
+| Ghostty | `ghostty/` | Commit Mono, automatic Ink/Paper palettes, platform behavior |
 | Windows Terminal | `windows-terminal/` | Matching WSL color scheme, font, and profile fragment |
 | Shell | `shell/` | Portable Bash/Zsh prompt, `dircolors`, and semantic `man`/`less` styling |
 | Neovim | `nvim/`, `vim/` | Protocol Ink colorscheme, clipboard behavior, scrollback-safe Vim fallback |
-| Zellij | `zellij/`, `bin/zellij-help` | Theme, indexed tab bar, layout, key index, and visible selection states |
+| Zellij | `zellij/`, `bin/zellij-help` | Paired themes, indexed tabs, key index, visible selections |
 | Remote edit | `bin/rvi` | Local themed Neovim over SSH, with narrow passwordless-sudo elevation |
 
 The installer creates symlinks instead of copying configuration. Editing the

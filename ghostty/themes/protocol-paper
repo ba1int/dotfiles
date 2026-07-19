@@ -1,0 +1,38 @@
+# Protocol Paper / Paper Sheet 01
+# Warm paper field, near-black ink, structural teal, exception red.
+
+background = #EDEAE1
+foreground = #191A17
+
+cursor-color = #191A17
+cursor-text = #EDEAE1
+
+selection-background = #C8DAD5
+selection-foreground = #191A17
+
+search-background = #C8DAD5
+search-foreground = #191A17
+search-selected-background = #191A17
+search-selected-foreground = #EDEAE1
+
+split-divider-color = #A6A49B
+unfocused-split-fill = #EDEAE1
+
+# ANSI compatibility inks are deliberately darker than their dark-mode
+# counterparts so program semantics retain contrast on the paper field.
+palette = 0=#191A17
+palette = 1=#B64034
+palette = 2=#467653
+palette = 3=#79661F
+palette = 4=#356F6B
+palette = 5=#705668
+palette = 6=#476E7F
+palette = 7=#555850
+palette = 8=#686B63
+palette = 9=#CE4D41
+palette = 10=#588862
+palette = 11=#927D2D
+palette = 12=#4D8984
+palette = 13=#866A7D
+palette = 14=#5A8191
+palette = 15=#191A17

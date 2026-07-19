@@ -1,5 +1,5 @@
 # Protocol Ink / GNU dircolors
-# Structural blue for directories, teal for links, coral for exceptions.
+# Structural cool inks for navigation, coral for filesystem exceptions.
 
 TERM xterm
 TERM xterm-256color

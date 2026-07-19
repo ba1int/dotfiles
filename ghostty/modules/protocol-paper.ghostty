@@ -11,8 +11,9 @@ font-size = 14.5
 font-feature = -calt,-liga,-dlig
 adjust-cell-height = 8%
 
-# Color system
-theme = protocol-ink
+# Color system. Ghostty follows the desktop appearance and reports the active
+# terminal color scheme to applications such as Zellij and Pi.
+theme = light:protocol-paper,dark:protocol-ink
 
 # Page geometry
 window-padding-x = 12

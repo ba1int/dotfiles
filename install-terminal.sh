@@ -114,6 +114,7 @@ if [ "$install_ghostty" -eq 1 ]; then
     link_path "$repo_root/ghostty/config.ghostty" "$ghostty_dir/config.ghostty"
     link_path "$repo_root/ghostty/modules" "$ghostty_dir/modules"
     link_path "$repo_root/ghostty/themes/protocol-ink" "$ghostty_theme_dir/protocol-ink"
+    link_path "$repo_root/ghostty/themes/protocol-paper" "$ghostty_theme_dir/protocol-paper"
     link_path "$ghostty_platform" "$ghostty_dir/platform.ghostty"
 fi
 
@@ -122,6 +123,7 @@ link_path "$repo_root/zellij/cheatsheet.md" "$zellij_dir/cheatsheet.md"
 link_path "$repo_root/zellij/layouts/protocol-index.kdl" "$zellij_dir/layouts/protocol-index.kdl"
 link_path "$repo_root/zellij/layouts/protocol-ops.kdl" "$zellij_dir/layouts/protocol-ops.kdl"
 link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protocol-ink.kdl"
+link_path "$repo_root/zellij/themes/protocol-paper.kdl" "$zellij_dir/themes/protocol-paper.kdl"
 
 link_path "$repo_root/vim/vimrc" "$HOME/.vimrc"
 link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
