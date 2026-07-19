@@ -17,10 +17,17 @@ assert_equal() {
 rvi_validate_host 'operator@app01.example.net' || fail 'valid user@host rejected'
 ! rvi_validate_host 'root@app;evil' || fail 'unsafe host accepted'
 rvi_validate_path '/etc/icinga2/zones.d/dc1/hosts.conf' || fail 'valid path rejected'
+rvi_validate_path '/' || fail 'filesystem root rejected'
 ! rvi_validate_path '../etc/shadow' || fail 'relative path accepted'
 ! rvi_validate_path '/etc/a path' || fail 'space-containing path accepted'
 ! rvi_validate_path '/etc//shadow' || fail 'double-slash path accepted'
 assert_equal "$(rvi_netrw_url lab-prod-app01 /etc/hosts)" 'scp://lab-prod-app01//etc/hosts'
+
+listing=$'f\t0644\troot:root\t20\t2026-07-19 12:00\thosts\nf\t0644\troot:root\t20\t2026-07-19 12:00\ta bad name\nd\t0755\troot:root\t80\t2026-07-19 12:00\ticinga2'
+filtered=$(printf '%s\n' "$listing" | rvi_filter_listing)
+[[ $filtered == *$'\t'icinga2* ]] || fail 'valid directory missing from filtered listing'
+[[ $filtered == *$'\t'hosts* ]] || fail 'valid file missing from filtered listing'
+[[ $filtered != *'a bad name'* ]] || fail 'unsafe remote name accepted'
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/rvi-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT

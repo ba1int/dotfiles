@@ -116,9 +116,18 @@ Use the local Neovim setup against a remote path without copying dotfiles or
 logging in as root:
 
 ```sh
+rvi                              # choose an SSH host, then browse
+rvi app01                        # browse this host from /
 rvi app01 /etc/icinga2/icinga2.conf
 rvi --read-only operator@app01 /var/log/myapp/current.log
 ```
+
+The picker is a local, themed `fzf` index over the remote filesystem. It makes
+one SSH listing request per directory and uses passwordless sudo when available
+so protected configuration trees remain navigable. Bash completion—and Zsh
+completion when its completion system is initialized—covers SSH aliases and
+remote paths. Remote path completion likewise performs one directory listing
+when requested.
 
 Files writable by the SSH user use Neovim's native SSH transport. Protected
 files are downloaded into a private local directory and opened with the same

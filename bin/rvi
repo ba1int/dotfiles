@@ -3,10 +3,20 @@ set -Eeuo pipefail
 
 readonly RVI_NVIM="${RVI_NVIM:-nvim}"
 rvi_tmpdir=
+rvi_browse_result=
+
+RVI_SSH_ARGS=(
+    -T
+    -o ClearAllForwardings=yes
+    -o ConnectTimeout=10
+    -o ForwardAgent=no
+    -o RequestTTY=no
+    -o UpdateHostKeys=no
+)
 
 usage() {
     cat <<'EOF'
-Usage: rvi [--read-only] HOST /absolute/path
+Usage: rvi [--read-only] [HOST [/absolute/path]]
 
 Open a remote file in local Neovim without installing editor configuration on
 the target. Normal files use Neovim's native SSH transport. Protected files
@@ -34,12 +44,132 @@ rvi_validate_host() {
 
 rvi_validate_path() {
     [[ $1 == /* ]] || return 1
+    [[ $1 == / ]] && return 0
     [[ $1 != *//* ]] || return 1
     [[ $1 =~ ^/[A-Za-z0-9._+/@:=,-]+(/[A-Za-z0-9._+/@:=,-]+)*/?$ ]]
 }
 
 rvi_netrw_url() {
     printf 'scp://%s//%s' "$1" "${2#/}"
+}
+
+rvi_list_hosts() {
+    local file
+    while IFS= read -r file; do
+        awk '
+            tolower($1) == "host" {
+                for (i = 2; i <= NF; i++) {
+                    if ($i !~ /[*?!]/) print $i
+                }
+            }
+        ' "$file"
+    done < <(
+        find "$HOME/.ssh" -maxdepth 3 -type f \
+            \( -name config -o -name '*.conf' \) -print 2>/dev/null
+    ) | LC_ALL=C sort -u
+}
+
+rvi_remote_list() {
+    local host=$1 directory=$2
+    ssh "${RVI_SSH_ARGS[@]}" "$host" sh -s -- "$directory" <<'REMOTE_LIST'
+directory=$1
+
+list_directory() {
+    find -L "$directory" -mindepth 1 -maxdepth 1 \
+        -printf '%y\t%m\t%u:%g\t%s\t%TY-%Tm-%Td %TH:%TM\t%f\n' 2>/dev/null || true
+}
+
+if sudo -n true >/dev/null 2>&1; then
+    sudo -n test -d "$directory" || exit 1
+    sudo -n sh -c '
+        directory=$1
+        find -L "$directory" -mindepth 1 -maxdepth 1 \
+            -printf '\''%y\t%m\t%u:%g\t%s\t%TY-%Tm-%Td %TH:%TM\t%f\n'\'' 2>/dev/null || true
+    ' sh "$directory"
+else
+    [ -d "$directory" ] || exit 1
+    list_directory
+fi
+REMOTE_LIST
+}
+
+rvi_filter_listing() {
+    local tab=$'\t'
+    awk -F "$tab" -v OFS="$tab" '
+        NF == 6 && $6 ~ /^[A-Za-z0-9._+@:=,-]+$/ {
+            $1 = $1 == "d" ? "DIR" : ($1 == "f" ? "FILE" : "LINK")
+            print
+        }
+    ' | LC_ALL=C sort -t $'\t' -k1,1 -k6,6
+}
+
+rvi_select_host() {
+    local selection
+    command -v fzf >/dev/null 2>&1 || rvi_die 'fzf is required for the host picker'
+    [[ -t 0 && -t 2 ]] || rvi_die 'the host picker needs an interactive terminal'
+    selection=$(rvi_list_hosts | fzf \
+        --height=70% --layout=reverse --border=sharp \
+        --prompt='SSH HOST  ' \
+        --header='RVI / REMOTE INDEX  ·  enter select  ·  esc close' \
+        --color='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780' \
+    ) || return 1
+    printf '%s' "$selection"
+}
+
+rvi_browse() {
+    local host=$1 directory=${2:-/} raw listing selection type mode owner size modified name
+    command -v fzf >/dev/null 2>&1 || rvi_die 'fzf is required for remote browsing'
+    [[ -t 0 && -t 1 ]] || rvi_die 'remote browsing needs an interactive terminal'
+
+    while :; do
+        raw=$(rvi_remote_list "$host" "$directory") \
+            || rvi_die "could not list $host:$directory"
+        listing=$(printf '%s\n' "$raw" | rvi_filter_listing)
+        if [[ $directory != / ]]; then
+            listing=$(printf 'DIR\t----\t-\t-\t-\t..\n%s' "$listing")
+        fi
+
+        selection=$(printf '%s\n' "$listing" | fzf \
+            --height=85% --layout=reverse --border=sharp \
+            --delimiter=$'\t' --with-nth=1,2,3,5,6 \
+            --prompt='REMOTE FS  ' \
+            --header="RVI / $host:$directory  ·  enter open  ·  / filter  ·  esc close" \
+            --color='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780' \
+        ) || return 1
+
+        IFS=$'\t' read -r type mode owner size modified name <<< "$selection"
+        if [[ $name == .. ]]; then
+            directory=$(dirname -- "$directory")
+        elif [[ $type == DIR ]]; then
+            [[ $directory == / ]] && directory=/$name || directory=$directory/$name
+        else
+            [[ $directory == / ]] && rvi_browse_result=/$name || rvi_browse_result=$directory/$name
+            return 0
+        fi
+    done
+}
+
+rvi_complete_path() {
+    local host=$1 current=${2:-/} directory base type mode owner size modified name suffix
+    [[ $current == /* ]] || return 0
+    if [[ $current == */ ]]; then
+        directory=${current%/}
+        [[ -n $directory ]] || directory=/
+        base=
+    else
+        directory=${current%/*}
+        [[ -n $directory ]] || directory=/
+        base=${current##*/}
+    fi
+
+    while IFS=$'\t' read -r type mode owner size modified name; do
+        [[ $name == "$base"* ]] || continue
+        suffix=
+        [[ $type == DIR ]] && suffix=/
+        [[ $directory == / ]] \
+            && printf '/%s%s\n' "$name" "$suffix" \
+            || printf '%s/%s%s\n' "$directory" "$name" "$suffix"
+    done < <(rvi_remote_list "$host" "$directory" 2>/dev/null | rvi_filter_listing)
 }
 
 rvi_color_enabled() {
@@ -155,7 +285,17 @@ REMOTE_SCRIPT
 rvi_main() {
     local read_only=0 host path probe kind can_read can_write sudo_ready remote_user
     local read_mode original edited crc bytes answer remote_upload status
-    local -a ssh_args
+
+    if [[ ${1:-} == --complete-hosts ]]; then
+        rvi_list_hosts
+        return 0
+    fi
+    if [[ ${1:-} == --complete-path ]]; then
+        [[ $# -eq 3 ]] || return 0
+        rvi_validate_host "$2" || return 0
+        rvi_complete_path "$2" "$3"
+        return 0
+    fi
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -166,25 +306,24 @@ rvi_main() {
             *) break ;;
         esac
     done
-    [[ $# -eq 2 ]] || { usage >&2; return 2; }
-    host=$1
-    path=$2
+    [[ $# -le 2 ]] || { usage >&2; return 2; }
+    if [[ $# -eq 0 ]]; then
+        host=$(rvi_select_host) || return 0
+        path=/
+    elif [[ $# -eq 1 ]]; then
+        host=$1
+        path=/
+    else
+        host=$1
+        path=$2
+    fi
 
     rvi_validate_host "$host" || rvi_die "unsafe SSH destination: $host"
     rvi_validate_path "$path" || rvi_die "path must be absolute and contain only portable configuration-path characters"
     command -v "$RVI_NVIM" >/dev/null 2>&1 || rvi_die "Neovim not found: $RVI_NVIM"
     command -v ssh >/dev/null 2>&1 || rvi_die 'ssh not found'
 
-    ssh_args=(
-        -T
-        -o ClearAllForwardings=yes
-        -o ConnectTimeout=10
-        -o ForwardAgent=no
-        -o RequestTTY=no
-        -o UpdateHostKeys=no
-    )
-
-    probe=$(ssh "${ssh_args[@]}" "$host" sh -s -- "$path" <<'REMOTE_PROBE'
+    probe=$(ssh "${RVI_SSH_ARGS[@]}" "$host" sh -s -- "$path" <<'REMOTE_PROBE'
 set -eu
 path=$1
 [ -e "$path" ] || { printf 'missing|0|0|0|%s\n' "$(id -un)"; exit 0; }
@@ -198,17 +337,18 @@ REMOTE_PROBE
     ) || rvi_die "could not inspect $host:$path"
 
     IFS='|' read -r kind can_read can_write sudo_ready remote_user <<< "$probe"
-    [[ $kind != missing ]] || rvi_die "remote path does not exist: $host:$path"
+    [[ $kind != missing ]] || rvi_die "remote path does not exist: $host:$path (use 'rvi $host' to browse)"
     [[ $kind == file || $kind == directory ]] || rvi_die "remote path is neither a regular file nor a directory"
 
     if [[ $kind == directory ]]; then
-        [[ $can_read == 1 ]] || rvi_die 'protected directory browsing is intentionally unsupported; open an exact file path'
-        rvi_heading 'REMOTE BROWSE / USER'
-        rvi_field HOST "$host"
-        rvi_field SSH "$remote_user"
-        rvi_field PATH "$path"
-        rvi_field WRITE 'read-only directory view'
-        exec "$RVI_NVIM" -R "$(rvi_netrw_url "$host" "$path")"
+        if rvi_browse "$host" "$path"; then
+            if [[ $read_only == 1 ]]; then
+                rvi_main --read-only "$host" "$rvi_browse_result"
+            else
+                rvi_main "$host" "$rvi_browse_result"
+            fi
+        fi
+        return 0
     fi
 
     if [[ $read_only == 1 && $can_read == 1 ]]; then
@@ -244,10 +384,10 @@ REMOTE_PROBE
 
     if [[ $can_read == 1 ]]; then
         read_mode=user
-        ssh "${ssh_args[@]}" "$host" "cat -- '$path'" > "$original/original"
+        ssh "${RVI_SSH_ARGS[@]}" "$host" "cat -- '$path'" > "$original/original"
     else
         read_mode=sudo
-        ssh "${ssh_args[@]}" "$host" "sudo -n cat -- '$path'" > "$original/original"
+        ssh "${RVI_SSH_ARGS[@]}" "$host" "sudo -n cat -- '$path'" > "$original/original"
     fi
     cp "$original/original" "$edited"
 
@@ -288,14 +428,14 @@ REMOTE_PROBE
     }
 
     read -r crc bytes _ < <(cksum < "$original/original")
-    remote_upload=$(ssh "${ssh_args[@]}" "$host" \
+    remote_upload=$(ssh "${RVI_SSH_ARGS[@]}" "$host" \
         'set -eu; umask 077; upload=$(mktemp /tmp/rvi.XXXXXX); trap '\''rm -f -- "$upload"'\'' EXIT; cat > "$upload"; printf "%s\n" "$upload"; trap - EXIT' \
         < "$edited") || rvi_die 'could not stage the edited file on the target'
     [[ $remote_upload == /tmp/rvi.* ]] || rvi_die 'target returned an invalid staging path'
 
-    if ! rvi_emit_apply_script | ssh "${ssh_args[@]}" "$host" \
+    if ! rvi_emit_apply_script | ssh "${RVI_SSH_ARGS[@]}" "$host" \
         "sudo -n sh -s -- '$path' '$remote_upload' '$crc' '$bytes'"; then
-        ssh "${ssh_args[@]}" "$host" "rm -f -- '$remote_upload'" >/dev/null 2>&1 || true
+        ssh "${RVI_SSH_ARGS[@]}" "$host" "rm -f -- '$remote_upload'" >/dev/null 2>&1 || true
         rvi_die 'remote apply failed; the original was retained or restored'
     fi
 

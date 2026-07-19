@@ -133,6 +133,7 @@ link_path "$repo_root/bin/rvi" "$HOME/.local/bin/rvi"
 if [ "$install_shell" -eq 1 ]; then
     protocol_dir="$config_home/protocol-ink"
     link_path "$repo_root/shell/protocol-ink.dircolors" "$protocol_dir/dircolors"
+    link_path "$repo_root/shell/protocol-ink-completion.sh" "$protocol_dir/completion.sh"
     link_path "$repo_root/shell/protocol-ink-less.sh" "$protocol_dir/less.sh"
     link_path "$repo_root/shell/protocol-ink-prompt.sh" "$protocol_dir/prompt.sh"
     link_path "$repo_root/shell/protocol-ink.sh" "$protocol_dir/shell.sh"
