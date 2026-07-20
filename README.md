@@ -111,7 +111,9 @@ new-tab template index. It currently offers two matching dispatcher desks:
 After choosing the desk, choose `CURRENT` to start every pane in the focused
 pane's working directory or `HOME` to start every pane in `~`. The picker is a
 local `fzf` view and adds no resident process. Native `Ctrl+t`, then `n` remains
-the fast single-pane new-tab action.
+the fast single-pane new-tab action. Its palette follows macOS or Windows
+light/dark appearance at launch; on other terminals, set
+`PROTOCOL_INK_APPEARANCE=light` or `dark` to override detection.
 
 When the separate `pi-tools` package is installed, press `Ctrl+o`, then `i`
 to open Pi's live task ledger in a floating pane. One agent opens directly;

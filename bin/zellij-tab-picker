@@ -49,7 +49,55 @@ resolve_layout() {
     fi
 }
 
-fzf_colors='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780'
+detect_appearance() {
+    case ${PROTOCOL_INK_APPEARANCE:-} in
+        light|dark)
+            printf '%s\n' "$PROTOCOL_INK_APPEARANCE"
+            return
+            ;;
+    esac
+
+    case $(uname -s 2>/dev/null) in
+        Darwin)
+            if command defaults read -g AppleInterfaceStyle 2>/dev/null \
+                | grep -qi dark; then
+                printf 'dark\n'
+            else
+                printf 'light\n'
+            fi
+            return
+            ;;
+        Linux)
+            case ${WSL_DISTRO_NAME:-}:${WSL_INTEROP:-} in
+                : ) ;;
+                *)
+                    if command -v powershell.exe >/dev/null 2>&1; then
+                        apps_use_light=$(powershell.exe -NoProfile -NonInteractive -Command \
+                            '[int](Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize").AppsUseLightTheme' \
+                            2>/dev/null | tr -d '\r')
+                        case $apps_use_light in
+                            1) printf 'light\n'; return ;;
+                            0) printf 'dark\n'; return ;;
+                        esac
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
+    colorfgbg=${COLORFGBG:-}
+    case ${colorfgbg##*;} in
+        7|9|10|11|12|13|14|15) printf 'light\n' ;;
+        *) printf 'dark\n' ;;
+    esac
+}
+
+appearance=$(detect_appearance)
+if [ "$appearance" = light ]; then
+    fzf_colors='bg:#EDEAE1,bg+:#C8DAD5,fg:#191A17,fg+:#191A17,hl:#356F6B,hl+:#B64034,border:#A6A49B,prompt:#356F6B,pointer:#B64034,marker:#79661F,header:#555850'
+else
+    fzf_colors='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780'
+fi
 tab=$(printf '\t')
 current_dir=$(pwd -P)
 

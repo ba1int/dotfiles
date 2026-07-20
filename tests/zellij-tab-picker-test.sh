@@ -21,6 +21,7 @@ ln -s "$repo_root/zellij/layouts/protocol-tab-shell.kdl" \
 cat > "$tmp_dir/bin/fzf" <<'EOF'
 #!/bin/sh
 set -eu
+printf '%s\n' "$@" >> "$PICKER_FZF_ARGS"
 input=$(cat)
 count=0
 [ ! -r "$PICKER_FZF_COUNT" ] || count=$(cat "$PICKER_FZF_COUNT")
@@ -41,9 +42,12 @@ run_picker() {
     local expected_layout=$2
     local expected_cwd=$3
     local expected_name=$4
+    local appearance=$5
+    local expected_background=$6
 
     printf '%s\n' "$choices" > "$tmp_dir/choices"
     : > "$tmp_dir/count"
+    : > "$tmp_dir/fzf-args"
     (
         cd "$tmp_dir/work/project"
         HOME="$tmp_dir/home" \
@@ -51,7 +55,9 @@ run_picker() {
         ZELLIJ_SESSION_NAME=test \
         PICKER_FZF_COUNT="$tmp_dir/count" \
         PICKER_FZF_CHOICES="$tmp_dir/choices" \
+        PICKER_FZF_ARGS="$tmp_dir/fzf-args" \
         PICKER_ZELLIJ_ARGS="$tmp_dir/args" \
+        PROTOCOL_INK_APPEARANCE="$appearance" \
             "$repo_root/bin/zellij-tab-picker"
     )
 
@@ -62,10 +68,23 @@ run_picker() {
         || fail "wrong cwd: $args"
     [[ $args == *"$expected_layout"* ]] \
         || fail "wrong layout: $args"
+    grep -F "bg:$expected_background" "$tmp_dir/fzf-args" >/dev/null \
+        || fail "$appearance picker did not use $expected_background"
 }
 
-run_picker $'1\n1' protocol-tab-pi.kdl "$tmp_dir/work/project" 'PI DESK'
-run_picker $'2\n2' protocol-tab-shell.kdl "$tmp_dir/home" 'SHELL DESK'
+run_picker $'1\n1' protocol-tab-pi.kdl "$tmp_dir/work/project" 'PI DESK' \
+    light '#EDEAE1'
+run_picker $'2\n2' protocol-tab-shell.kdl "$tmp_dir/home" 'SHELL DESK' \
+    dark '#151714'
+
+if [[ $(uname -s) == Darwin ]] \
+    && ! defaults read -g AppleInterfaceStyle 2>/dev/null | grep -qi dark; then
+    system_background='#EDEAE1'
+else
+    system_background='#151714'
+fi
+run_picker $'1\n2' protocol-tab-pi.kdl "$tmp_dir/home" 'PI DESK' \
+    '' "$system_background"
 
 for layout in protocol-tab-pi protocol-tab-shell; do
     directions=$(sed -n 's/.*split_direction="\([^"]*\)".*/\1/p' \
