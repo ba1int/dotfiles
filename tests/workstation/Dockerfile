@@ -34,7 +34,7 @@ RUN git config --global user.name 'Workstation Smoke' \
     && for repo in dotfiles pi-tools study-room; do \
         git -C "/opt/fixtures/$repo" init; \
         git -C "/opt/fixtures/$repo" add -A; \
-        git -C "/opt/fixtures/$repo" commit -m fixture; \
+        git -C "/opt/fixtures/$repo" commit --allow-empty -m fixture; \
     done
 
 CMD ["workstation-smoke"]
