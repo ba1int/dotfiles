@@ -19,6 +19,8 @@ assert_link() {
 }
 
 printf '\n== clean WSL workstation smoke test ==\n'
+git clone "${DOTFILES_REPO:?}" "$HOME/dotfiles"
+pass 'dotfiles cloned into an empty home directory'
 cd "$HOME/dotfiles"
 ./install-workstation.sh
 pass 'one-shot workstation bootstrap completed'
@@ -26,6 +28,16 @@ pass 'one-shot workstation bootstrap completed'
 # A rerun represents updating the same workstation after a future git pull.
 ./install-workstation.sh
 pass 'one-shot bootstrap is idempotent'
+
+for checkout in dotfiles pi-tools study-room; do
+    [[ -d "$HOME/$checkout/.git" ]] || fail "$checkout was not cloned"
+done
+if [[ -d "$HOME/.pi/agent/retired-extensions" ]] \
+    && find "$HOME/.pi/agent/retired-extensions" -mindepth 1 -print -quit \
+        | grep -q .; then
+    fail 'idempotent rerun retired a repository-owned extension'
+fi
+pass 'all repositories are real clones and reruns create no extension churn'
 
 PATH="$HOME/.local/bin:$PATH"
 export PATH
@@ -40,8 +52,11 @@ assert_link "$HOME/.config/nvim/init.vim" "$HOME/dotfiles/nvim/init.vim"
 assert_link "$HOME/.config/zellij/config.kdl" "$HOME/dotfiles/zellij/config.kdl"
 assert_link "$HOME/.local/bin/rvi" "$HOME/dotfiles/bin/rvi"
 assert_link "$HOME/.local/bin/pi-ledger" "$HOME/pi-tools/bin/pi-ledger"
+assert_link "$HOME/.local/bin/study" "$HOME/study-room/bin/study"
 assert_link "$HOME/.pi/agent/extensions/ssh-direct" \
     "$HOME/pi-tools/extensions/ssh-direct"
+assert_link "$HOME/.pi/agent/extensions/study-learn-emit" \
+    "$HOME/study-room/pi/learn-emit"
 pass 'portable configuration links are correct'
 
 node - "$HOME/.pi/agent/settings.json" "$HOME/.pi/agent/models.json" <<'NODE'
@@ -49,7 +64,9 @@ const fs = require('node:fs');
 const [settingsPath, modelsPath] = process.argv.slice(2);
 const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
 const models = JSON.parse(fs.readFileSync(modelsPath, 'utf8'));
-if (settings.theme !== 'protocol-ink') throw new Error('Pi theme was not applied');
+if (settings.theme !== 'protocol-paper/protocol-ink') {
+  throw new Error('adaptive Pi theme pair was not applied');
+}
 if (settings.externalEditor !== 'nvim') throw new Error('Pi editor was not applied');
 if ('packages' in settings) throw new Error('third-party Pi packages remain configured');
 if (!JSON.stringify(models).includes('272000')) {
@@ -60,7 +77,7 @@ pass 'Pi settings and context budget are correct'
 
 mapfile -t extensions < <(find "$HOME/.pi/agent/extensions" -mindepth 1 -maxdepth 1 \
     -printf '%f\n' | sort)
-expected_extensions=(side-task ssh-direct task-ledger thinking-router)
+expected_extensions=(appearance-sync side-task ssh-direct study-learn-emit task-ledger thinking-router)
 [[ ${extensions[*]} == "${expected_extensions[*]}" ]] \
     || fail "unexpected extension set: ${extensions[*]}"
 pass 'only repository-owned Pi extensions are active'
@@ -85,12 +102,14 @@ pass 'Zellij accepts the installed configuration'
 pi --version >/dev/null
 pi-ledger --help >/dev/null
 rvi --help >/dev/null
+study doctor >/dev/null
 pass 'Pi and workstation entrypoints launch without authentication'
 
 bash -lic '
     command -v pi >/dev/null
     command -v pi-ledger >/dev/null
     command -v rvi >/dev/null
+    command -v study >/dev/null
 ' || fail 'login shell did not load the workstation PATH'
 pass 'fresh Bash login shell loads the workstation layer'
 

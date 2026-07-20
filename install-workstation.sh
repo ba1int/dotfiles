@@ -4,6 +4,8 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 pi_tools_dir=${PI_TOOLS_DIR:-"$HOME/pi-tools"}
 pi_tools_repo=${PI_TOOLS_REPO:-git@github.com:ba1int/pi-tools.git}
+study_room_dir=${STUDY_ROOM_DIR:-"$HOME/study-room"}
+study_room_repo=${STUDY_ROOM_REPO:-git@github.com:ba1int/study-room.git}
 stamp=$(date '+%Y%m%d-%H%M%S')
 set_default=1
 install_font=1
@@ -26,7 +28,8 @@ usage() {
 Usage: ./install-workstation.sh [--no-default] [--no-font]
 
 Bootstraps the complete Protocol Ink workstation inside Ubuntu/Debian WSL:
-base packages, pinned user-local Node and Zellij, dotfiles, and pi-tools.
+base packages, pinned user-local Node and Zellij, dotfiles, pi-tools, and the
+Study Room.
 
 Options:
   --no-default  Keep the current Windows Terminal default profile.
@@ -36,6 +39,8 @@ Options:
 Environment:
   PI_TOOLS_DIR   pi-tools checkout (default: ~/pi-tools)
   PI_TOOLS_REPO  clone source when PI_TOOLS_DIR is absent
+  STUDY_ROOM_DIR   Study Room checkout (default: ~/study-room)
+  STUDY_ROOM_REPO  clone source when STUDY_ROOM_DIR is absent
 EOF
 }
 
@@ -228,6 +233,22 @@ install_pi_tools() {
     "$pi_tools_dir/install.sh"
 }
 
+install_study_room() {
+    if [ ! -e "$study_room_dir" ]; then
+        git clone "$study_room_repo" "$study_room_dir"
+    elif [ ! -d "$study_room_dir" ]; then
+        printf 'STUDY_ROOM_DIR is not a directory: %s\n' "$study_room_dir" >&2
+        exit 1
+    fi
+
+    if [ ! -x "$study_room_dir/install.sh" ]; then
+        printf 'Study Room installer not found: %s/install.sh\n' \
+            "$study_room_dir" >&2
+        exit 1
+    fi
+    "$study_room_dir/install.sh"
+}
+
 install_apt_dependencies
 mkdir -p "$HOME/.local/bin"
 PATH="$HOME/.local/bin:$PATH"
@@ -240,7 +261,9 @@ set --
 [ "$install_font" -eq 1 ] || set -- "$@" --no-font
 "$repo_root/install-wsl.sh" "$@"
 install_pi_tools
+install_study_room
 
 printf '\nWORKSTATION READY // PROTOCOL INK\n'
 printf 'Restart Windows Terminal, run pi, and complete /login.\n'
+printf 'Run study inside Zellij to open the Study Room.\n'
 printf 'Add machine-local work skills separately; no credentials were copied.\n'
