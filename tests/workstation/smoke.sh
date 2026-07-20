@@ -83,7 +83,7 @@ pass 'Pi settings and context budget are correct'
 
 mapfile -t extensions < <(find "$HOME/.pi/agent/extensions" -mindepth 1 -maxdepth 1 \
     -printf '%f\n' | sort)
-expected_extensions=(appearance-sync side-task ssh-direct study-learn-emit task-ledger thinking-router)
+expected_extensions=(appearance-sync context-sentinel side-task ssh-direct study-learn-emit task-ledger thinking-router)
 [[ ${extensions[*]} == "${expected_extensions[*]}" ]] \
     || fail "unexpected extension set: ${extensions[*]}"
 pass 'only repository-owned Pi extensions are active'
