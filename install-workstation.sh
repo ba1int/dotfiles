@@ -3,9 +3,9 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 pi_tools_dir=${PI_TOOLS_DIR:-"$HOME/pi-tools"}
-pi_tools_repo=${PI_TOOLS_REPO:-git@github.com:ba1int/pi-tools.git}
+pi_tools_repo=${PI_TOOLS_REPO:-https://github.com/ba1int/pi-tools.git}
 study_room_dir=${STUDY_ROOM_DIR:-"$HOME/study-room"}
-study_room_repo=${STUDY_ROOM_REPO:-git@github.com:ba1int/study-room.git}
+study_room_repo=${STUDY_ROOM_REPO:-https://github.com/ba1int/study-room.git}
 stamp=$(date '+%Y%m%d-%H%M%S')
 set_default=1
 install_font=1

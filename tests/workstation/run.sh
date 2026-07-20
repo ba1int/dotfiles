@@ -30,4 +30,12 @@ docker build \
     -t "$image_name" \
     -f "$repo_root/tests/workstation/Dockerfile" \
     "$repo_root"
-docker run --rm --platform "$platform" "$image_name"
+if [ "${WORKSTATION_SMOKE_ONLINE:-0}" = 1 ]; then
+    docker run --rm --platform "$platform" \
+        -e DOTFILES_REPO=https://github.com/ba1int/dotfiles.git \
+        -e PI_TOOLS_REPO=https://github.com/ba1int/pi-tools.git \
+        -e STUDY_ROOM_REPO=https://github.com/ba1int/study-room.git \
+        "$image_name"
+else
+    docker run --rm --platform "$platform" "$image_name"
+fi

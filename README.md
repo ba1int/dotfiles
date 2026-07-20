@@ -16,7 +16,7 @@ project.
 ### macOS or Linux
 
 ```sh
-git clone git@github.com:ba1int/dotfiles.git ~/Documents/setup
+git clone https://github.com/ba1int/dotfiles.git ~/Documents/setup
 cd ~/Documents/setup
 ./install-terminal.sh
 ```
@@ -37,7 +37,7 @@ Useful installer switches:
 ### WSL 2 + Windows Terminal
 
 ```sh
-git clone git@github.com:ba1int/dotfiles.git ~/setup
+git clone https://github.com/ba1int/dotfiles.git ~/setup
 cd ~/setup
 ./install-workstation.sh
 ```
@@ -47,8 +47,8 @@ Node and Zellij builds, the Linux-side configuration, Commit Mono, the Windows
 Terminal profile, Pi, the separate repository-owned `pi-tools` package, and
 the terminal-native Study Room.
 After it finishes, restart Windows Terminal and complete Pi's `/login`; work
-skills and credentials remain machine-local. The bootstrap reuses the GitHub
-SSH access that cloned this repository to fetch `pi-tools` and `study-room`. Use
+skills and credentials remain machine-local. The public `pi-tools` and
+`study-room` repositories are fetched over HTTPS without GitHub credentials. Use
 `./install-workstation.sh --no-default` to preserve the current terminal
 default, or use `./install-wsl.sh` when dependencies and Pi are managed
 separately.
@@ -190,6 +190,9 @@ makes no model calls. With Docker running and sibling `pi-tools` and
 ```sh
 PI_TOOLS_DIR=~/pi-tools STUDY_ROOM_DIR=~/study-room ./tests/workstation/run.sh
 ```
+
+Set `WORKSTATION_SMOKE_ONLINE=1` to make the container ignore its local fixture
+repositories and clone all three public repositories from GitHub over HTTPS.
 
 It defaults to `linux/amd64`, matching ordinary WSL workstations. Set
 `WORKSTATION_SMOKE_PLATFORM=linux/arm64` only for an ARM Windows target.
