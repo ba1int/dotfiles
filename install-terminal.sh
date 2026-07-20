@@ -122,6 +122,8 @@ link_path "$repo_root/zellij/config.kdl" "$zellij_dir/config.kdl"
 link_path "$repo_root/zellij/cheatsheet.md" "$zellij_dir/cheatsheet.md"
 link_path "$repo_root/zellij/layouts/protocol-index.kdl" "$zellij_dir/layouts/protocol-index.kdl"
 link_path "$repo_root/zellij/layouts/protocol-ops.kdl" "$zellij_dir/layouts/protocol-ops.kdl"
+link_path "$repo_root/zellij/layouts/protocol-tab-pi.kdl" "$zellij_dir/layouts/protocol-tab-pi.kdl"
+link_path "$repo_root/zellij/layouts/protocol-tab-shell.kdl" "$zellij_dir/layouts/protocol-tab-shell.kdl"
 link_path "$repo_root/zellij/themes/protocol-ink.kdl" "$zellij_dir/themes/protocol-ink.kdl"
 link_path "$repo_root/zellij/themes/protocol-paper.kdl" "$zellij_dir/themes/protocol-paper.kdl"
 
@@ -130,6 +132,7 @@ link_path "$repo_root/nvim/init.vim" "$nvim_dir/init.vim"
 link_path "$repo_root/nvim/protocol-clipboard.vim" "$nvim_dir/protocol-clipboard.vim"
 link_path "$repo_root/nvim/colors/protocol-ink.vim" "$nvim_dir/colors/protocol-ink.vim"
 link_path "$repo_root/bin/zellij-help" "$HOME/.local/bin/zellij-help"
+link_path "$repo_root/bin/zellij-tab-picker" "$HOME/.local/bin/zellij-tab-picker"
 link_path "$repo_root/bin/rvi" "$HOME/.local/bin/rvi"
 
 if [ "$install_shell" -eq 1 ]; then

@@ -50,7 +50,13 @@ pass 'all workstation commands are available'
 
 assert_link "$HOME/.config/nvim/init.vim" "$HOME/dotfiles/nvim/init.vim"
 assert_link "$HOME/.config/zellij/config.kdl" "$HOME/dotfiles/zellij/config.kdl"
+assert_link "$HOME/.config/zellij/layouts/protocol-tab-pi.kdl" \
+    "$HOME/dotfiles/zellij/layouts/protocol-tab-pi.kdl"
+assert_link "$HOME/.config/zellij/layouts/protocol-tab-shell.kdl" \
+    "$HOME/dotfiles/zellij/layouts/protocol-tab-shell.kdl"
 assert_link "$HOME/.local/bin/rvi" "$HOME/dotfiles/bin/rvi"
+assert_link "$HOME/.local/bin/zellij-tab-picker" \
+    "$HOME/dotfiles/bin/zellij-tab-picker"
 assert_link "$HOME/.local/bin/pi-ledger" "$HOME/pi-tools/bin/pi-ledger"
 assert_link "$HOME/.local/bin/study" "$HOME/study-room/bin/study"
 assert_link "$HOME/.pi/agent/extensions/ssh-direct" \
@@ -102,6 +108,7 @@ pass 'Zellij accepts the installed configuration'
 pi --version >/dev/null
 pi-ledger --help >/dev/null
 rvi --help >/dev/null
+zellij-tab-picker --help >/dev/null
 study doctor >/dev/null
 pass 'Pi and workstation entrypoints launch without authentication'
 

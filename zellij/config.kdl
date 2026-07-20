@@ -152,6 +152,18 @@ keybinds clear-defaults=true {
             }
             SwitchToMode "normal"
         }
+        bind "n" {
+            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/zellij-tab-picker\"" {
+                floating true
+                close_on_exit true
+                x "18%"
+                y "20%"
+                width "64%"
+                height "60%"
+                name "NEW TAB / TEMPLATE INDEX"
+            }
+            SwitchToMode "normal"
+        }
         bind "Ctrl o" { SwitchToMode "normal"; }
         bind "p" {
             LaunchOrFocusPlugin "plugin-manager" {

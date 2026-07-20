@@ -1,5 +1,5 @@
-// Protocol Ink / named operations desk
-// Optional one-left, two-right layout for dispatcher-style work.
+// Protocol Ink / Pi operations desk
+// Pi owns the large left pane; two clean shells share the right column.
 
 layout {
     pane size=1 borderless=true {
@@ -8,10 +8,10 @@ layout {
         }
     }
     pane split_direction="vertical" {
-        pane name="01 / DISPATCH" size="60%"
+        pane name="01 / PI" size="60%" command="pi" focus=true
         pane split_direction="horizontal" {
             pane name="02 / SHELL"
-            pane name="03 / WATCH"
+            pane name="03 / SHELL"
         }
     }
 }

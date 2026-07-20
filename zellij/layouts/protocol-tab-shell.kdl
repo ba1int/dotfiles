@@ -1,5 +1,5 @@
-// Protocol Ink / named operations desk
-// Optional one-left, two-right layout for dispatcher-style work.
+// Protocol Ink / shell operations desk
+// The same dispatcher geometry with three clean interactive shells.
 
 layout {
     pane size=1 borderless=true {
@@ -8,10 +8,10 @@ layout {
         }
     }
     pane split_direction="vertical" {
-        pane name="01 / DISPATCH" size="60%"
+        pane name="01 / SHELL" size="60%" focus=true
         pane split_direction="horizontal" {
             pane name="02 / SHELL"
-            pane name="03 / WATCH"
+            pane name="03 / SHELL"
         }
     }
 }

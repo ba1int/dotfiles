@@ -1,0 +1,99 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Usage: zellij-tab-picker
+
+Choose a Protocol Ink tab layout and whether it starts in the current pane's
+working directory or in the user's home directory.
+EOF
+}
+
+die() {
+    printf 'zellij-tab-picker: %s\n' "$*" >&2
+    exit 1
+}
+
+case ${1:-} in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    '') ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
+
+[ -n "${ZELLIJ_SESSION_NAME:-}" ] \
+    || die 'this picker must run inside Zellij'
+command -v fzf >/dev/null 2>&1 || die 'fzf is required'
+command -v zellij >/dev/null 2>&1 || die 'zellij is required'
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+layout_dir=$config_home/zellij/layouts
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+repo_layout_dir=$script_dir/../zellij/layouts
+
+resolve_layout() {
+    layout_name=$1
+    if [ -r "$layout_dir/$layout_name.kdl" ]; then
+        printf '%s\n' "$layout_dir/$layout_name.kdl"
+    elif [ -r "$repo_layout_dir/$layout_name.kdl" ]; then
+        printf '%s\n' "$repo_layout_dir/$layout_name.kdl"
+    else
+        die "layout not found: $layout_name"
+    fi
+}
+
+fzf_colors='bg:#151714,bg+:#242824,fg:#ded7c7,fg+:#f0eadb,hl:#7ea3ae,hl+:#e88978,border:#49504b,prompt:#7ea3ae,pointer:#e88978,marker:#d9df72,header:#858780'
+tab=$(printf '\t')
+current_dir=$(pwd -P)
+
+layout_selection=$(
+    printf '%s\n' \
+        "protocol-tab-pi${tab}01 / PI DESK${tab}Pi left  ·  two shells right" \
+        "protocol-tab-shell${tab}02 / SHELL DESK${tab}three clean shells" \
+    | fzf \
+        --height=100% --layout=reverse --border=sharp \
+        --delimiter="$tab" --with-nth=2,3 \
+        --prompt='LAYOUT  ' \
+        --header='NEW TAB / 01 LAYOUT  ·  enter select  ·  esc close' \
+        --color="$fzf_colors"
+) || exit 0
+
+layout_name=${layout_selection%%"$tab"*}
+case $layout_name in
+    protocol-tab-pi) tab_name='PI DESK' ;;
+    protocol-tab-shell) tab_name='SHELL DESK' ;;
+    *) die 'invalid layout selection' ;;
+esac
+
+cwd_selection=$(
+    printf '%s\n' \
+        "current${tab}01 / CURRENT${tab}$current_dir" \
+        "home${tab}02 / HOME${tab}$HOME" \
+    | fzf \
+        --height=100% --layout=reverse --border=sharp \
+        --delimiter="$tab" --with-nth=2,3 \
+        --prompt='WORKDIR  ' \
+        --header='NEW TAB / 02 WORKDIR  ·  enter open  ·  esc back' \
+        --color="$fzf_colors"
+) || exit 0
+
+cwd_mode=${cwd_selection%%"$tab"*}
+case $cwd_mode in
+    current) base_dir=$current_dir ;;
+    home) base_dir=$HOME ;;
+    *) die 'invalid working-directory selection' ;;
+esac
+
+layout_path=$(resolve_layout "$layout_name")
+zellij action new-tab \
+    --name "$tab_name" \
+    --cwd "$base_dir" \
+    --layout "$layout_path" \
+    >/dev/null

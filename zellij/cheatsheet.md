@@ -101,6 +101,7 @@ End the session: `Ctrl-q` quits Zellij.
 
 `?`                        this key index
 `i`                        Pi agent board / task ledger; `q` closes it
+`n`                        new tab template + working-directory picker
 `w`                        session manager
 `l`                        layout manager
 `c`                        configuration

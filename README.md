@@ -102,7 +102,16 @@ records; it does not guess at or recolor arbitrary log content.
 ## Zellij key index
 
 Inside Zellij, press `Ctrl+o`, then `?` to open the themed key index. Press
-`Ctrl+o`, then `w` for the session manager.
+`Ctrl+o`, then `w` for the session manager. Press `Ctrl+o`, then `n` for the
+new-tab template index. It currently offers two matching dispatcher desks:
+
+- `PI DESK` starts Pi in the large left pane with two shells stacked right.
+- `SHELL DESK` opens the same geometry as three clean shells.
+
+After choosing the desk, choose `CURRENT` to start every pane in the focused
+pane's working directory or `HOME` to start every pane in `~`. The picker is a
+local `fzf` view and adds no resident process. Native `Ctrl+t`, then `n` remains
+the fast single-pane new-tab action.
 
 When the separate `pi-tools` package is installed, press `Ctrl+o`, then `i`
 to open Pi's live task ledger in a floating pane. One agent opens directly;
