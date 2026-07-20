@@ -35,7 +35,18 @@ cat > "$tmp_dir/bin/zellij" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$@" > "$PICKER_ZELLIJ_ARGS"
 EOF
-chmod +x "$tmp_dir/bin/fzf" "$tmp_dir/bin/zellij"
+
+cat > "$tmp_dir/bin/uname" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$PICKER_UNAME"
+EOF
+
+cat > "$tmp_dir/bin/powershell.exe" <<'EOF'
+#!/bin/sh
+printf '%s\r\n' "$PICKER_APPS_USE_LIGHT"
+EOF
+chmod +x "$tmp_dir/bin/fzf" "$tmp_dir/bin/zellij" \
+    "$tmp_dir/bin/uname" "$tmp_dir/bin/powershell.exe"
 
 run_picker() {
     local choices=$1
@@ -44,6 +55,9 @@ run_picker() {
     local expected_name=$4
     local appearance=$5
     local expected_background=$6
+    local platform=${7:-"$(uname -s)"}
+    local wsl_distro=${8:-}
+    local apps_use_light=${9:-}
 
     printf '%s\n' "$choices" > "$tmp_dir/choices"
     : > "$tmp_dir/count"
@@ -57,7 +71,11 @@ run_picker() {
         PICKER_FZF_CHOICES="$tmp_dir/choices" \
         PICKER_FZF_ARGS="$tmp_dir/fzf-args" \
         PICKER_ZELLIJ_ARGS="$tmp_dir/args" \
+        PICKER_UNAME="$platform" \
+        PICKER_APPS_USE_LIGHT="$apps_use_light" \
         PROTOCOL_INK_APPEARANCE="$appearance" \
+        WSL_DISTRO_NAME="$wsl_distro" \
+        WSL_INTEROP="$wsl_distro" \
             "$repo_root/bin/zellij-tab-picker"
     )
 
@@ -85,6 +103,10 @@ else
 fi
 run_picker $'1\n2' protocol-tab-pi.kdl "$tmp_dir/home" 'PI DESK' \
     '' "$system_background"
+run_picker $'1\n1' protocol-tab-pi.kdl "$tmp_dir/work/project" 'PI DESK' \
+    '' '#EDEAE1' Linux Ubuntu 1
+run_picker $'2\n2' protocol-tab-shell.kdl "$tmp_dir/home" 'SHELL DESK' \
+    '' '#151714' Linux Ubuntu 0
 
 for layout in protocol-tab-pi protocol-tab-shell; do
     directions=$(sed -n 's/.*split_direction="\([^"]*\)".*/\1/p' \
