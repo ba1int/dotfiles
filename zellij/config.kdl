@@ -134,7 +134,7 @@ keybinds clear-defaults=true {
         }
         bind "d" { Detach; }
         bind "i" {
-            Run "/bin/sh" "-c" "exec \"$HOME/.local/bin/pi-ledger\" --embedded" {
+            Run "/bin/sh" "-c" "if command -v pi-ledger >/dev/null 2>&1; then exec pi-ledger --embedded; fi; printf '\\nPI ledger is optional. Enable it with:\\n  PI_TOOLS_PROFILE=ops ~/pi-tools/install.sh\\n\\n'; read -r _" {
                 floating true
                 close_on_exit true
                 x "8%"

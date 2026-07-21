@@ -115,12 +115,16 @@ the fast single-pane new-tab action. Its palette follows macOS or Windows
 light/dark appearance at launch; on other terminals, set
 `PROTOCOL_INK_APPEARANCE=light` or `dark` to override detection.
 
-When the separate `pi-tools` package is installed, press `Ctrl+o`, then `i`
+With the optional `pi-tools` `ops` profile enabled, press `Ctrl+o`, then `i`
 to open Pi's live task ledger in a floating pane. One agent opens directly;
 several agents open as a selectable board. Use `↑`/`↓` to select, `Enter` to
 jump to the agent's pane, `d` for its detailed ledger, and `q` to close. The
 view is driven only by local Pi lifecycle events, adds no model context or
 tokens, and never opens automatically.
+
+The benchmark-backed workstation default uses the smaller `core` profile. If
+the ledger is not enabled, the same key shows the one-line opt-in command
+instead of failing.
 
 The default `protocol-index` layout remains a blank indexed workspace. Start
 the optional named dispatcher desk with:
