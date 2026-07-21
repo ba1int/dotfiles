@@ -39,6 +39,7 @@ Options:
 Environment:
   PI_TOOLS_DIR   pi-tools checkout (default: ~/pi-tools)
   PI_TOOLS_REPO  clone source when PI_TOOLS_DIR is absent
+  PI_TOOLS_PROFILE  core (default), ops, or full
   STUDY_ROOM_DIR   Study Room checkout (default: ~/study-room)
   STUDY_ROOM_REPO  clone source when STUDY_ROOM_DIR is absent
 EOF
@@ -226,11 +227,20 @@ install_pi_tools() {
         exit 1
     fi
 
+    if [ -d "$pi_tools_dir/.git" ]; then
+        if [ -n "$(git -C "$pi_tools_dir" status --porcelain)" ]; then
+            printf 'pi-tools has local changes; commit or stash them before updating: %s\n' \
+                "$pi_tools_dir" >&2
+            exit 1
+        fi
+        git -C "$pi_tools_dir" pull --ff-only
+    fi
+
     if [ ! -x "$pi_tools_dir/install.sh" ]; then
         printf 'pi-tools installer not found: %s/install.sh\n' "$pi_tools_dir" >&2
         exit 1
     fi
-    "$pi_tools_dir/install.sh"
+    PI_TOOLS_PROFILE=${PI_TOOLS_PROFILE:-core} "$pi_tools_dir/install.sh"
 }
 
 install_study_room() {
@@ -239,6 +249,16 @@ install_study_room() {
     elif [ ! -d "$study_room_dir" ]; then
         printf 'STUDY_ROOM_DIR is not a directory: %s\n' "$study_room_dir" >&2
         exit 1
+    fi
+
+
+    if [ -d "$study_room_dir/.git" ]; then
+        if [ -n "$(git -C "$study_room_dir" status --porcelain)" ]; then
+            printf 'Study Room has local changes; commit or stash them before updating: %s\n' \
+                "$study_room_dir" >&2
+            exit 1
+        fi
+        git -C "$study_room_dir" pull --ff-only
     fi
 
     if [ ! -x "$study_room_dir/install.sh" ]; then

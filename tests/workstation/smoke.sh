@@ -60,7 +60,6 @@ assert_link "$HOME/.config/zellij/layouts/protocol-tab-shell.kdl" \
 assert_link "$HOME/.local/bin/rvi" "$HOME/dotfiles/bin/rvi"
 assert_link "$HOME/.local/bin/zellij-tab-picker" \
     "$HOME/dotfiles/bin/zellij-tab-picker"
-assert_link "$HOME/.local/bin/pi-ledger" "$HOME/pi-tools/bin/pi-ledger"
 assert_link "$HOME/.local/bin/study" "$HOME/study-room/bin/study"
 assert_link "$HOME/.pi/agent/extensions/ssh-direct" \
     "$HOME/pi-tools/extensions/ssh-direct"
@@ -77,6 +76,9 @@ if (settings.theme !== 'protocol-paper/protocol-ink') {
   throw new Error('adaptive Pi theme pair was not applied');
 }
 if (settings.externalEditor !== 'nvim') throw new Error('Pi editor was not applied');
+if (settings.defaultProvider !== 'openai-codex') throw new Error('Pi provider default was not applied');
+if (settings.defaultModel !== 'gpt-5.6-luna') throw new Error('Luna default was not applied');
+if (settings.defaultThinkingLevel !== 'low') throw new Error('low thinking default was not applied');
 if ('packages' in settings) throw new Error('third-party Pi packages remain configured');
 if (!JSON.stringify(models).includes('272000')) {
   throw new Error('Sol context budget was not merged');
@@ -86,7 +88,7 @@ pass 'Pi settings and context budget are correct'
 
 mapfile -t extensions < <(find "$HOME/.pi/agent/extensions" -mindepth 1 -maxdepth 1 \
     -printf '%f\n' | sort)
-expected_extensions=(appearance-sync context-sentinel side-task ssh-direct study-learn-emit task-ledger thinking-router)
+expected_extensions=(appearance-sync ssh-direct study-learn-emit)
 [[ ${extensions[*]} == "${expected_extensions[*]}" ]] \
     || fail "unexpected extension set: ${extensions[*]}"
 pass 'only repository-owned Pi extensions are active'
@@ -109,7 +111,6 @@ zellij setup --check >/dev/null
 pass 'Zellij accepts the installed configuration'
 
 pi --version >/dev/null
-pi-ledger --help >/dev/null
 rvi --help >/dev/null
 zellij-tab-picker --help >/dev/null
 study doctor >/dev/null
@@ -117,7 +118,6 @@ pass 'Pi and workstation entrypoints launch without authentication'
 
 bash -lic '
     command -v pi >/dev/null
-    command -v pi-ledger >/dev/null
     command -v rvi >/dev/null
     command -v study >/dev/null
 ' || fail 'login shell did not load the workstation PATH'
