@@ -220,7 +220,7 @@ install_zellij() {
 
 install_pi_tools() {
     if [ ! -e "$pi_tools_dir" ]; then
-        git clone "$pi_tools_repo" "$pi_tools_dir"
+        git clone --no-hardlinks "$pi_tools_repo" "$pi_tools_dir"
     elif [ ! -d "$pi_tools_dir" ]; then
         printf 'PI_TOOLS_DIR is not a directory: %s\n' "$pi_tools_dir" >&2
         exit 1
@@ -235,7 +235,7 @@ install_pi_tools() {
 
 install_study_room() {
     if [ ! -e "$study_room_dir" ]; then
-        git clone "$study_room_repo" "$study_room_dir"
+        git clone --no-hardlinks "$study_room_repo" "$study_room_dir"
     elif [ ! -d "$study_room_dir" ]; then
         printf 'STUDY_ROOM_DIR is not a directory: %s\n' "$study_room_dir" >&2
         exit 1

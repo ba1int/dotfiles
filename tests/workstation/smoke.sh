@@ -19,7 +19,10 @@ assert_link() {
 }
 
 printf '\n== clean WSL workstation smoke test ==\n'
-git clone "${DOTFILES_REPO:?}" "$HOME/dotfiles"
+# BuildKit's rootless overlay can report false hardlink identity mismatches when
+# cloning the local fixture repository. Real HTTPS/SSH clones are unaffected;
+# forcing copies keeps the disposable test equivalent and storage-driver safe.
+git clone --no-hardlinks "${DOTFILES_REPO:?}" "$HOME/dotfiles"
 pass 'dotfiles cloned into an empty home directory'
 cd "$HOME/dotfiles"
 ./install-workstation.sh
